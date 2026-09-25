@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e11">
+<title>DM.TEST — 第一層 統合テスト</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0b0e11;--panel:#151a1f;--panel2:#1c2329;--line:#333d45;
+  --text:#e8edf1;--muted:#94a0aa;--good:#86b68d;--warn:#d7b36d;--bad:#d98686;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+header{position:sticky;top:0;z-index:20;background:rgba(11,14,17,.96);border-bottom:1px solid var(--line);padding:10px 12px}
+h1{font-size:18px;margin:0} h2{font-size:16px;margin:0 0 10px} h3{font-size:14px;margin:0 0 8px}
+small,.muted{color:var(--muted)}
+main{max-width:1120px;margin:auto;padding:12px 12px calc(80px + env(safe-area-inset-bottom));display:grid;gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:12px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.stat{background:var(--panel2);border-radius:9px;padding:9px}.stat b{font-size:20px;display:block}.stat span{font-size:12px;color:var(--muted)}
+button,select,input,textarea{font:inherit}
+button{border:1px solid #47535d;background:#29333b;color:var(--text);border-radius:9px;padding:9px 11px;min-height:40px}
+button.primary{background:#34523d;border-color:#527b5c}button.warn{background:#594725;border-color:#806436}button.danger{background:#573636;border-color:#7c4d4d}
+button:disabled{opacity:.35}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spread{justify-content:space-between}.stack{display:grid;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 5px;border-bottom:1px solid #29323a;text-align:center}th:first-child,td:first-child{text-align:left}
+.bar{height:14px;background:#090c0e;border:1px solid #2d363e;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#65866a,#9ec5a2)}
+.badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:12px}.badge.good{border-color:#4f7356;color:#a9d3af}.badge.warn{border-color:#745e35;color:#efcf8e}.badge.bad{border-color:#754747;color:#efabab}
+.report{white-space:pre-wrap;background:#0f1418;border-left:3px solid #64856b;border-radius:6px;padding:10px 12px;min-height:58px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px}
+.card{background:#101519;border:1px solid #34404a;border-radius:10px;padding:9px}.card.active{outline:2px solid var(--warn)}.card.dead{opacity:.35}
+.hp{height:8px;background:#232a30;border-radius:8px;overflow:hidden;margin:6px 0}.hp i{display:block;height:100%;background:#799f7f}
+.battle{border:1px solid #75593a;background:#211b16}
+.log{max-height:310px;overflow:auto;background:#090c0e;border:1px solid #29323a;border-radius:8px;padding:8px;font-size:12px}.log div{padding:4px 0;border-bottom:1px solid #1d2328}
+input,select,textarea{background:#0f1418;border:1px solid #3b4650;color:var(--text);border-radius:8px;padding:7px}input[type=number]{width:88px}textarea{width:100%;min-height:62px}
+.hidden{display:none!important}.debug{border-color:#554e38}
+hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
+@media(max-width:650px){.stats{grid-template-columns:repeat(2,1fr)}table{font-size:12px}th,td{padding:6px 3px}.wide{overflow-x:auto}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row spread">
+    <div><h1>DM.TEST — 第一層 統合テスト</h1><small>採掘・召喚・固定侵入・実戦・損耗・補充を一本で記録</small></div>
+    <span id="sessionLabel" class="muted"></span>
+  </div>
+</header>
+<main>
+
+<section class="stats">
+  <div class="stat"><span>WT</span><b id="wt">—</b></div>
+  <div class="stat"><span>魔石</span><b id="stones">0</b></div>
+  <div class="stat"><span>資源</span><b id="resources">0</b></div>
+  <div class="stat"><span>掘削力</span><b id="miningPower">0</b></div>
+  <div class="stat"><span>死亡</span><b id="deaths">0</b></div>
+</section>
+
+<section id="battlePanel" class="panel battle hidden">
+  <div class="row spread">
+    <div>
+      <h2 id="battleHeading">戦闘</h2>
+      <small>速度順。同速度は侵入者優先、同陣営は左優先。DM側の手番では攻撃対象を選択。</small>
+    </div>
+    <span id="battleRound" class="badge warn"></span>
+  </div>
+
+  <h3>侵入者</h3>
+  <div id="enemyCards" class="cards"></div>
+  <h3 style="margin-top:12px">防衛側</h3>
+  <div id="allyCards" class="cards"></div>
+
+  <div id="playerAction" class="panel hidden" style="margin-top:12px;background:#11171b">
+    <div id="actorText" style="margin-bottom:8px"></div>
+    <div id="targetButtons" class="row"></div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <button id="battleStep" class="primary">戦闘開始 / 次へ</button>
+    <button id="battleAuto">自軍も自動で進行</button>
+  </div>
+  <p class="muted">v0.1では通常攻撃のみ。撤退・降伏・罠・特殊能力は未実装。固定侵入者のアライメント未決定のため、侵入者の標的規則は下のテスト設定で変更可能です。</p>
+  <div id="battleLog" class="log"></div>
+</section>
+
+<section id="managementPanels">
+<div class="grid">
+  <section class="panel">
+    <h2>第一層</h2>
+    <div class="row spread"><span>状態</span><span id="floorState" class="badge">未開始</span></div>
+    <div style="margin:10px 0 5px" class="row spread"><span>概算掘削範囲</span><b id="rangeText">0 × 0</b></div>
+    <div class="bar"><i id="rangeBar" style="width:0%"></i></div>
+    <p class="muted">フロアは概念上100×100。下層への掘りポイントは発見するまで表示しません。</p>
+
+    <div id="lowerArea" class="hidden">
+      <hr>
+      <div class="row spread"><span>下層坑道</span><span id="lowerStatus">掘削可能</span></div>
+      <div class="bar" style="margin-top:6px"><i id="lowerBar" style="width:0%"></i></div>
+      <p class="muted">発見後のみ進捗を表示。下方は硬い岩盤です。</p>
+    </div>
+
+    <div class="row">
+      <button id="digExplore" class="primary">横に掘る</button>
+      <button id="digDown" disabled>下へ掘る</button>
+    </div>
+    <p id="rockLabel" class="muted">岩盤：通常</p>
+  </section>
+
+  <section class="panel">
+    <h2>副官報告</h2>
+    <select id="lieutenant">
+      <option value="0">適性0</option>
+      <option value="1">一般・適性1</option>
+      <option value="2">一般・適性2</option>
+      <option value="3">一般・適性3</option>
+      <option value="4">一般・適性4</option>
+      <option value="5">一般・適性5</option>
+      <option value="lize">リゼ・適性5</option>
+    </select>
+    <div id="report" class="report" style="margin-top:10px">—</div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="row spread"><h2>配下</h2><span class="muted">掘削・防衛・予備を実際に配分</span></div>
+  <div class="wide">
+  <table>
+    <thead><tr><th>配下</th><th>費用</th><th>掘削</th><th>防衛</th><th>予備</th><th>配置変更</th></tr></thead>
+    <tbody id="unitRows"></tbody>
+  </table>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="summonKobold">コボルト召喚 -8</button>
+    <button id="summonGoblin">ゴブリン召喚 -9</button>
+    <button id="summonHob">ホブゴブリン召喚 -40</button>
+  </div>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <h2>WT操作</h2>
+    <div class="stack">
+      <button id="startTutorial" class="primary">初回鉱脈42 → コボルト3・ゴブリン2召喚</button>
+      <button id="endTurn" class="warn" disabled>WT終了</button>
+      <div class="row">
+        <input id="memo" placeholder="主観メモ：不足感、面倒さ等" style="flex:1;min-width:180px">
+        <button id="memoBtn">記録</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>累計</h2>
+    <table><tbody>
+      <tr><th>採掘魔石</th><td id="minedTotal">0</td></tr>
+      <tr><th>消費魔石</th><td id="spentTotal">0</td></tr>
+      <tr><th>取得資源</th><td id="resourceTotal">0</td></tr>
+      <tr><th>戦闘回数</th><td id="battleCount">0</td></tr>
+      <tr><th>第二層到達</th><td id="reached">—</td></tr>
+    </tbody></table>
+  </section>
+</div>
+</section>
+
+<section class="panel debug">
+  <h2>テスト設定（仮置き値）</h2>
+  <div class="grid">
+    <div class="stack">
+      <label>下層ポイント発見面積 <input id="cfgDiscovery" type="number" value="1600"></label>
+      <label>横掘り硬岩化面積 <input id="cfgHard" type="number" value="2500"></label>
+      <label>下層突破必要量 <input id="cfgDown" type="number" value="720"></label>
+      <label>通常岩倍率 <input id="cfgNormal" type="number" step=".1" value="4"></label>
+    </div>
+    <div class="stack">
+      <label>硬岩倍率 <input id="cfgHardMul" type="number" step=".1" value="1"></label>
+      <label>魔石/掘削力/WT <input id="cfgStone" type="number" step=".005" value=".225"></label>
+      <label>資源/掘削力/WT <input id="cfgResource" type="number" step=".05" value=".5"></label>
+      <label>侵入者標的
+        <select id="cfgEnemyTarget">
+          <option value="random">ランダム（暫定）</option>
+          <option value="strong">最強を狙う</option>
+          <option value="weak">最弱を狙う</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="applyConfig">設定を反映・記録</button>
+    <label>乱数seed <input id="seedInput" type="number" value="20260926"></label>
+    <button id="applySeed">seed変更</button>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="row spread"><h2>テレメトリ</h2><span id="eventCount" class="muted"></span></div>
+  <div id="eventLog" class="log"></div>
+  <div class="row" style="margin-top:10px">
+    <button id="exportJson">JSON</button>
+    <button id="exportCsv">CSV</button>
+    <button id="copySummary">集計コピー</button>
+    <button id="reset" class="danger">初期化</button>
+  </div>
+</section>
+
+</main>
+<script>
+(() => {
+"use strict";
+
+const KEY="dm-test-integrated-v01";
+
+const UNIT={
+  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,cost:8},
+  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:10,def:8,mdef:5,spd:12,mining:9,cost:9},
+  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,cost:40}
+};
+const ENEMY={
+  noviceWarrior:{name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10},
+  regularWarrior:{name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10},
+  bandit:{name:"野党",hp:40,atk:12,def:11,mdef:8,spd:13},
+  banditBoss:{name:"野党ボス",hp:55,atk:15,def:15,mdef:10,spd:14}
+};
+const ENCOUNTERS={
+  7:{name:"駆け出し戦士 ×2",units:["noviceWarrior","noviceWarrior"]},
+  10:{name:"一般戦士 ×1 ＋ 駆け出し戦士 ×2",units:["regularWarrior","noviceWarrior","noviceWarrior"]},
+  15:{name:"野党 ×3",units:["bandit","bandit","bandit"]},
+  18:{name:"野党ボス ×1 ＋ 野党 ×3",units:["banditBoss","bandit","bandit","bandit"]}
+};
+
+function initial(){
+  return {
+    version:"0.1-integrated",
+    sessionId:"DM-"+new Date().toISOString().replace(/\D/g,"").slice(0,14)+"-"+Math.random().toString(36).slice(2,6),
+    startedAt:new Date().toISOString(),
+    wt:1,started:false,stones:0,resources:0,minedTotal:0,spentTotal:0,resourceTotal:0,deaths:0,battleCount:0,
+    area:0,down:0,lowerFound:false,digMode:"explore",reachedFloor2:false,reachedAt:null,
+    stoneCarry:0,resourceCarry:0,
+    units:{kobold:{mining:0,defense:0,reserve:0},goblin:{mining:0,defense:0,reserve:0},hob:{mining:0,defense:0,reserve:0}},
+    config:{discovery:1600,hardAt:2500,downNeed:720,normalMul:4,hardMul:1,stoneRate:.225,resourceRate:.5,enemyTarget:"random"},
+    seed:20260926,rngState:20260926,
+    battle:null,events:[]
+  };
+}
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))||initial()}catch(e){S=initial()}
+
+const $=id=>document.getElementById(id);
+const clone=o=>JSON.parse(JSON.stringify(o));
+const total=t=>S.units[t].mining+S.units[t].defense+S.units[t].reserve;
+const miningPower=()=>Object.keys(UNIT).reduce((a,t)=>a+S.units[t].mining*UNIT[t].mining,0);
+const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
+const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,reachedFloor2:S.reachedFloor2,units:clone(S.units),deaths:S.deaths});
+
+function event(type,detail={}){
+  S.events.push({seq:S.events.length+1,at:new Date().toISOString(),wt:S.wt,type,detail,state:snap()});
+  save();
+}
+function esc(v){return String(v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]))}
+
+function rng(){
+  let t=S.rngState+=0x6D2B79F5;
+  t=Math.imul(t^t>>>15,t|1);
+  t^=t+Math.imul(t^t>>>7,t|61);
+  const out=((t^t>>>14)>>>0)/4294967296;
+  return out;
+}
+function d6(){return 1+Math.floor(rng()*6)}
+function roll2d6(){const a=d6(),b=d6();return {a,b,total:a+b}}
+
+function status(hp,max){
+  const r=hp/max;
+  if(hp<=0)return "死亡";
+  if(r<=.2)return "瀕死";
+  if(r<=.4)return "重傷";
+  return "通常";
+}
+
+function tutorial(){
+  if(S.started)return;
+  S.started=true;
+  S.stones=42;S.minedTotal=42;event("tutorial_vein",{stone:42});
+  const cost=42;S.stones-=cost;S.spentTotal+=cost;
+  S.units.kobold.mining=3;S.units.goblin.defense=2;
+  event("tutorial_summon",{kobold:3,goblin:2,cost});
+  render();
+}
+
+function summon(type){
+  const u=UNIT[type];
+  if(!S.started||S.battle||S.stones<u.cost)return;
+  S.stones-=u.cost;S.spentTotal+=u.cost;S.units[type].reserve++;
+  event("summon",{unit:type,cost:u.cost});render();
+}
+
+function move(type,from,to){
+  if(S.battle||S.units[type][from]<1)return;
+  S.units[type][from]--;S.units[type][to]++;
+  event("assignment",{unit:type,from,to});render();
+}
+
+function miningYield(p){
+  S.stoneCarry+=p*S.config.stoneRate;S.resourceCarry+=p*S.config.resourceRate;
+  const st=Math.floor(S.stoneCarry),rs=Math.floor(S.resourceCarry);
+  S.stoneCarry-=st;S.resourceCarry-=rs;
+  S.stones+=st;S.resources+=rs;S.minedTotal+=st;S.resourceTotal+=rs;
+  return {stone:st,resource:rs};
+}
+
+function endTurn(){
+  if(!S.started||S.battle||S.reachedFloor2)return;
+  const p=miningPower();
+  let progress=0,foundNow=false,hard=false;
+  if(S.digMode==="down"&&S.lowerFound){
+    hard=true;progress=p*S.config.hardMul;S.down=Math.min(S.config.downNeed,S.down+progress);
+    if(S.down>=S.config.downNeed){S.reachedFloor2=true;S.reachedAt=S.wt}
+  }else{
+    hard=S.area>=S.config.hardAt;
+    progress=p*(hard?S.config.hardMul:S.config.normalMul);
+    S.area=Math.min(10000,S.area+progress);
+    if(!S.lowerFound&&S.area>=S.config.discovery){S.lowerFound=true;foundNow=true}
+  }
+  const gain=miningYield(p);
+  event("turn_result",{power:p,mode:S.digMode,hard,progress:+progress.toFixed(1),stone:gain.stone,resource:gain.resource,foundLower:foundNow,reachedFloor2:S.reachedFloor2});
+  if(foundNow)event("lower_point_found",{area:+S.area.toFixed(1)});
+  if(S.reachedFloor2){event("floor2_reached",{wt:S.wt});render();return}
+  if(ENCOUNTERS[S.wt]) startBattle(S.wt);
+  else S.wt++;
+  render();
+}
+
+function makeCombatant(side,key,index,sourceType=null){
+  const src=side==="enemy"?ENEMY[key]:UNIT[key];
+  return {
+    uid:side+"-"+S.wt+"-"+index+"-"+Math.floor(rng()*1e8),
+    side,key,sourceType:sourceType||key,name:src.name,index,
+    maxHp:src.hp,hp:src.hp,atk:src.atk,def:src.def,mdef:src.mdef,spd:src.spd,
+    alive:true
+  };
+}
+
+function startBattle(wt){
+  const e=ENCOUNTERS[wt];
+  const enemies=e.units.map((k,i)=>makeCombatant("enemy",k,i));
+  const deck=[];
+  let idx=0;
+  for(const t of ["hob","goblin","kobold"]){
+    for(let i=0;i<S.units[t].defense;i++)deck.push(makeCombatant("ally",t,idx++,t));
+  }
+  S.battle={
+    wt,encounter:e.name,round:0,enemies,
+    allyDeck:deck,allies:deck.splice(0,4),
+    order:[],cursor:0,waiting:false,activeUid:null,autoAllies:false,
+    log:[],finished:false,result:null
+  };
+  S.battleCount++;
+  blog("侵入："+e.name);
+  if(!S.battle.allies.length){
+    finishBattle("防衛突破");
+    return;
+  }
+  event("battle_start",{encounter:e.name,defenders:S.battle.allies.concat(S.battle.allyDeck).map(x=>x.key),enemyTarget:S.config.enemyTarget,seedState:S.rngState});
+}
+
+function blog(msg){
+  if(!S.battle)return;
+  S.battle.log.push(msg);
+}
+
+function living(arr){return arr.filter(x=>x.alive&&x.hp>0)}
+function fillAllies(){
+  if(!S.battle)return;
+  while(living(S.battle.allies).length<4 && S.battle.allyDeck.length){
+    const n=S.battle.allyDeck.shift();S.battle.allies.push(n);blog(n.name+" が防衛線に入った。");
+  }
+}
+
+function strength(c){return c.maxHp+c.atk+c.def+c.mdef+c.spd}
+function enemyTarget(){
+  const targets=living(S.battle.allies);
+  if(!targets.length)return null;
+  if(S.config.enemyTarget==="strong")return [...targets].sort((a,b)=>strength(b)-strength(a)||a.index-b.index)[0];
+  if(S.config.enemyTarget==="weak")return [...targets].sort((a,b)=>strength(a)-strength(b)||a.index-b.index)[0];
+  return targets[Math.floor(rng()*targets.length)];
+}
+
+function buildOrder(){
+  const actors=[...living(S.battle.enemies),...living(S.battle.allies)];
+  actors.sort((a,b)=>{
+    if(b.spd!==a.spd)return b.spd-a.spd;
+    if(a.side!==b.side)return a.side==="enemy"?-1:1;
+    return a.index-b.index;
+  });
+  S.battle.order=actors.map(x=>x.uid);S.battle.cursor=0;S.battle.round++;
+  blog("— Round "+S.battle.round+" —");
+}
+
+function findActor(uid){
+  return [...S.battle.enemies,...S.battle.allies].find(x=>x.uid===uid);
+}
+
+function damage(attacker,target){
+  const r=roll2d6();
+  const dmg=Math.max(0,r.total+attacker.atk-target.def);
+  const before=target.hp;target.hp=Math.max(0,target.hp-dmg);
+  if(target.hp<=0){target.alive=false}
+  blog(attacker.name+" → "+target.name+" / "+r.a+"+"+r.b+"+"+attacker.atk+"-"+target.def+" = "+dmg+" dmg"+(target.hp<=0?" 【死亡】":" ["+target.hp+"/"+target.maxHp+" "+status(target.hp,target.maxHp)+"]"));
+  event("combat_action",{round:S.battle.round,actor:attacker.name,target:target.name,dice:[r.a,r.b],damage:dmg,targetHpBefore:before,targetHpAfter:target.hp,targetStatus:status(target.hp,target.maxHp)});
+  if(target.hp<=0 && target.side==="ally") allyDeath(target);
+}
+
+function allyDeath(c){
+  if(S.units[c.sourceType].defense>0)S.units[c.sourceType].defense--;
+  S.deaths++;
+  event("unit_death",{unit:c.sourceType,role:"defense",battle:S.battle.encounter});
+  fillAllies();
+}
+
+function checkBattleEnd(){
+  if(!living(S.battle.enemies).length){finishBattle("撃退");return true}
+  fillAllies();
+  if(!living(S.battle.allies).length && !S.battle.allyDeck.length){finishBattle("防衛突破");return true}
+  return false;
+}
+
+function processUntilChoice(){
+  if(!S.battle||S.battle.finished)return;
+  if(checkBattleEnd())return;
+  if(!S.battle.order.length||S.battle.cursor>=S.battle.order.length)buildOrder();
+
+  while(S.battle.cursor<S.battle.order.length){
+    const uid=S.battle.order[S.battle.cursor++];
+    const actor=findActor(uid);
+    if(!actor||!actor.alive)continue;
+    if(actor.side==="enemy"){
+      const t=enemyTarget(); if(t)damage(actor,t);
+      if(checkBattleEnd())return;
+      continue;
+    }
+    const targets=living(S.battle.enemies);
+    if(!targets.length){finishBattle("撃退");return}
+    if(S.battle.autoAllies){
+      damage(actor,targets[0]);
+      if(checkBattleEnd())return;
+      continue;
+    }
+    S.battle.waiting=true;S.battle.activeUid=actor.uid;render();return;
+  }
+  S.battle.order=[];
+  processUntilChoice();
+}
+
+function playerAttack(targetUid){
+  if(!S.battle||!S.battle.waiting)return;
+  const actor=findActor(S.battle.activeUid),target=findActor(targetUid);
+  if(!actor||!actor.alive||!target||!target.alive)return;
+  S.battle.waiting=false;S.battle.activeUid=null;
+  damage(actor,target);
+  if(!checkBattleEnd())processUntilChoice();
+  render();
+}
+
+function finishBattle(result){
+  if(!S.battle||S.battle.finished)return;
+  S.battle.finished=true;S.battle.result=result;
+  blog("戦闘結果："+result);
+  event("battle_result",{
+    encounter:S.battle.encounter,result,
+    enemySurvivors:living(S.battle.enemies).map(x=>({name:x.name,hp:x.hp})),
+    allySurvivors:living(S.battle.allies).map(x=>({name:x.name,hp:x.hp})),
+    allyQueued:S.battle.allyDeck.length
+  });
+  render();
+}
+
+function closeBattle(){
+  if(!S.battle||!S.battle.finished)return;
+  S.battle=null;S.wt++;render();
+}
+
+function report(){
+  const mode=$("lieutenant").value;
+  if(mode==="0")return "ギギ……ギ……";
+  const lvl=mode==="lize"?5:+mode;
+  const last=[...S.events].reverse().find(e=>e.type==="turn_result");
+  const p=miningPower();let a=[];
+  if(lvl===1)a.push(p>0?"掘削は進んでいます。":"掘削班が動いていません。");
+  if(lvl>=2&&last)a.push("今WTは、魔石"+last.detail.stone+"、資源"+last.detail.resource+"を確保しました。");
+  if(lvl>=3&&S.lowerFound&&S.digMode==="down"&&p>0){
+    const n=Math.ceil(Math.max(0,S.config.downNeed-S.down)/(p*S.config.hardMul));
+    if(lvl===3)a.push(n>=10?"まだ十数ターンほど掛かりそうです。":n>=5?"あと数ターンは掛かりそうです。":"もうそれほど掛からないでしょう。");
+    if(lvl===4)a.push("現在の掘削力なら、およそ"+Math.max(1,n-1)+"～"+(n+1)+"WTほどです。");
+    if(lvl===5)a.push("損耗がなければ、あと"+n+"WT前後で掘り抜ける見込みです。");
+  }
+  if(lvl>=4&&p<48)a.push("掘削力が落ちています。人員を補えば改善します。");
+  if(lvl>=5&&p>48)a.push("掘削には余裕があります。防衛へ回せる者がいないか確認できます。");
+  if(!a.length)a.push("特に報告すべき変化はありません。");
+  let t=a.join("\n");
+  if(mode==="lize"){
+    t=t.replace("今WTは、","……今WTは、")
+      .replace("掘削力が落ちています。人員を補えば改善します。","掘削に回せる者が減っています。このままでは少し遅れそうです。……余裕があるなら、掘り手を増やした方がよいと思います。")
+      .replace("掘削には余裕があります。防衛へ回せる者がいないか確認できます。","掘削には少し余裕があるようです。必要なら、守りへ回してもよいと思います。")
+      .replace("特に報告すべき変化はありません。","……今のところ、大きな変化はありません。");
+  }
+  return t;
+}
+
+function renderUnits(){
+  $("unitRows").innerHTML=Object.entries(UNIT).map(([k,u])=>{
+    const x=S.units[k];
+    return `<tr><td>${esc(u.name)} <span class="muted">(${total(k)})</span></td><td>${u.cost}</td><td>${x.mining}</td><td>${x.defense}</td><td>${x.reserve}</td>
+    <td><div class="row" style="justify-content:center">
+      <button data-m="${k},reserve,mining">掘+</button><button data-m="${k},mining,reserve">掘−</button>
+      <button data-m="${k},reserve,defense">防+</button><button data-m="${k},defense,reserve">防−</button>
+    </div></td></tr>`;
+  }).join("");
+  document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const [k,f,t]=b.dataset.m.split(",");move(k,f,t)});
+}
+
+function cardHtml(c){
+  const pc=Math.max(0,c.hp/c.maxHp*100);
+  return `<div class="card ${!c.alive?"dead":""}" id="card-${c.uid}">
+    <div class="row spread"><b>${esc(c.name)}</b><span class="badge">${esc(status(c.hp,c.maxHp))}</span></div>
+    <div class="hp"><i style="width:${pc}%"></i></div>
+    <div>${c.hp}/${c.maxHp} HP</div>
+    <small>攻${c.atk} 防${c.def} 速${c.spd}</small>
+  </div>`;
+}
+
+function renderBattle(){
+  const b=S.battle;$("battlePanel").classList.toggle("hidden",!b);
+  $("managementPanels").classList.toggle("hidden",!!b);
+  if(!b)return;
+  $("battleHeading").textContent="WT"+b.wt+"　"+b.encounter;
+  $("battleRound").textContent="Round "+b.round+(b.finished?" / "+b.result:"");
+  $("enemyCards").innerHTML=b.enemies.map(cardHtml).join("");
+  $("allyCards").innerHTML=b.allies.map(cardHtml).join("")+(b.allyDeck.length?`<div class="card"><b>防衛山札</b><div>${b.allyDeck.length}体待機</div></div>`:"");
+  $("battleLog").innerHTML=b.log.slice().reverse().map(x=>"<div>"+esc(x)+"</div>").join("");
+  $("battleStep").textContent=b.finished?"戦闘を終了して次WTへ":"戦闘開始 / 次へ";
+  $("battleAuto").textContent=b.autoAllies?"自軍自動：ON":"自軍も自動で進行";
+  $("playerAction").classList.toggle("hidden",!b.waiting||b.finished);
+  if(b.waiting&&!b.finished){
+    const actor=findActor(b.activeUid);$("actorText").innerHTML="<b>"+esc(actor.name)+"の手番</b> — 攻撃対象を選択";
+    $("targetButtons").innerHTML=living(b.enemies).map(x=>`<button data-target="${x.uid}">${esc(x.name)} (${x.hp}/${x.maxHp})</button>`).join("");
+    document.querySelectorAll("[data-target]").forEach(bt=>bt.onclick=()=>playerAttack(bt.dataset.target));
+  }
+}
+
+function renderLog(){
+  $("eventCount").textContent=S.events.length+" events";
+  $("eventLog").innerHTML=S.events.slice(-100).reverse().map(e=>"<div><b>#"+e.seq+" WT"+e.wt+" "+esc(e.type)+"</b>　"+esc(JSON.stringify(e.detail))+"</div>").join("")||"<div class='muted'>ログなし</div>";
+}
+
+function render(){
+  $("wt").textContent=S.started?S.wt:"—";$("stones").textContent=S.stones;$("resources").textContent=S.resources;$("miningPower").textContent=miningPower();$("deaths").textContent=S.deaths;
+  $("sessionLabel").textContent=S.sessionId;
+  const side=Math.min(100,Math.sqrt(S.area));
+  $("rangeText").textContent=Math.floor(side)+" × "+Math.floor(side);
+  $("rangeBar").style.width=Math.min(100,side)+"%";
+  $("floorState").textContent=!S.started?"未開始":S.reachedFloor2?"第二層到達":S.lowerFound?(S.digMode==="down"?"下層掘削中":"横掘削継続"):"探索掘削中";
+  $("lowerArea").classList.toggle("hidden",!S.lowerFound);
+  $("lowerBar").style.width=Math.min(100,S.down/S.config.downNeed*100)+"%";
+  $("lowerStatus").textContent=Math.floor(S.down)+" / "+S.config.downNeed;
+  $("digDown").disabled=!S.lowerFound||!!S.battle||S.reachedFloor2;
+  $("digExplore").disabled=!!S.battle||S.reachedFloor2;
+  $("digDown").className=S.digMode==="down"?"primary":"";$("digExplore").className=S.digMode==="explore"?"primary":"";
+  $("rockLabel").textContent="岩盤："+((S.digMode==="down"&&S.lowerFound)||S.area>=S.config.hardAt?"硬い":"通常");
+  $("startTutorial").disabled=S.started;$("endTurn").disabled=!S.started||!!S.battle||S.reachedFloor2;
+  $("summonKobold").disabled=!S.started||S.stones<8||!!S.battle;$("summonGoblin").disabled=!S.started||S.stones<9||!!S.battle;$("summonHob").disabled=!S.started||S.stones<40||!!S.battle;
+  $("minedTotal").textContent=S.minedTotal;$("spentTotal").textContent=S.spentTotal;$("resourceTotal").textContent=S.resourceTotal;$("battleCount").textContent=S.battleCount;$("reached").textContent=S.reachedFloor2?"WT"+S.reachedAt:"—";
+  $("report").textContent=report();
+  renderUnits();renderBattle();renderLog();save();
+}
+
+function loadConfigInputs(){
+  $("cfgDiscovery").value=S.config.discovery;$("cfgHard").value=S.config.hardAt;$("cfgDown").value=S.config.downNeed;$("cfgNormal").value=S.config.normalMul;$("cfgHardMul").value=S.config.hardMul;$("cfgStone").value=S.config.stoneRate;$("cfgResource").value=S.config.resourceRate;$("cfgEnemyTarget").value=S.config.enemyTarget;$("seedInput").value=S.seed;
+}
+function applyConfig(){
+  S.config={
+    discovery:+$("cfgDiscovery").value,hardAt:+$("cfgHard").value,downNeed:+$("cfgDown").value,
+    normalMul:+$("cfgNormal").value,hardMul:+$("cfgHardMul").value,
+    stoneRate:+$("cfgStone").value,resourceRate:+$("cfgResource").value,enemyTarget:$("cfgEnemyTarget").value
+  };
+  event("config_change",{config:clone(S.config)});render();
+}
+function setSeed(){
+  const n=(+$("seedInput").value)||1;S.seed=n>>>0;S.rngState=S.seed;event("seed_change",{seed:S.seed});render();
+}
+
+function download(name,type,body){
+  const blob=new Blob([body],{type});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+}
+function csv(){
+  const head=["seq","at","wt","type","detail","stones","resources","miningPower","area","down","deaths"];
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  return [head.join(","),...S.events.map(e=>[e.seq,e.at,e.wt,e.type,JSON.stringify(e.detail),e.state.stones,e.state.resources,e.state.miningPower,e.state.area,e.state.down,e.state.deaths].map(q).join(","))].join("\n");
+}
+function summary(){
+  return [
+    "DM.TEST "+S.sessionId,
+    "WT="+S.wt,
+    "第二層到達="+(S.reachedFloor2?"YES(WT"+S.reachedAt+")":"NO"),
+    "魔石="+S.stones+" / 採掘累計="+S.minedTotal+" / 消費累計="+S.spentTotal,
+    "資源="+S.resources,
+    "死亡="+S.deaths+" / 戦闘="+S.battleCount,
+    "概算掘削="+Math.floor(Math.sqrt(S.area))+"x"+Math.floor(Math.sqrt(S.area)),
+    "下層="+Math.floor(S.down)+"/"+S.config.downNeed,
+    "seed="+S.seed,
+    "config="+JSON.stringify(S.config)
+  ].join("\n");
+}
+
+$("startTutorial").onclick=tutorial;$("endTurn").onclick=endTurn;
+$("summonKobold").onclick=()=>summon("kobold");$("summonGoblin").onclick=()=>summon("goblin");$("summonHob").onclick=()=>summon("hob");
+$("digExplore").onclick=()=>{if(!S.battle){S.digMode="explore";event("dig_mode",{mode:"explore"});render()}};
+$("digDown").onclick=()=>{if(S.lowerFound&&!S.battle){S.digMode="down";event("dig_mode",{mode:"down"});render()}};
+$("lieutenant").onchange=()=>{event("lieutenant_view",{value:$("lieutenant").value});render()};
+$("memoBtn").onclick=()=>{const v=$("memo").value.trim();if(v){event("player_note",{text:v});$("memo").value="";render()}};
+$("applyConfig").onclick=applyConfig;$("applySeed").onclick=setSeed;
+$("battleStep").onclick=()=>{if(!S.battle)return;if(S.battle.finished)closeBattle();else processUntilChoice();render()};
+$("battleAuto").onclick=()=>{if(!S.battle||S.battle.finished)return;S.battle.autoAllies=!S.battle.autoAllies;event("battle_auto",{enabled:S.battle.autoAllies});if(S.battle.autoAllies&&!S.battle.waiting)processUntilChoice();render()};
+$("exportJson").onclick=()=>download(S.sessionId+".json","application/json",JSON.stringify(S,null,2));
+$("exportCsv").onclick=()=>download(S.sessionId+".csv","text/csv;charset=utf-8","\ufeff"+csv());
+$("copySummary").onclick=async()=>{try{await navigator.clipboard.writeText(summary());alert("集計をコピーしました")}catch(e){prompt("コピーしてください",summary())}};
+$("reset").onclick=()=>{if(confirm("現在のテスト記録を消して初期化しますか？")){localStorage.removeItem(KEY);S=initial();loadConfigInputs();render()}};
+
+loadConfigInputs();render();
+})();
+</script>
+</body>
+</html>
