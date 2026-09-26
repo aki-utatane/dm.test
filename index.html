@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e11">
-<title>DM.TEST — 第一層 統合テスト v0.4</title>
+<title>DM.TEST — 第一層 統合テスト v0.5</title>
 <style>
 :root{
   color-scheme:dark;
@@ -64,6 +64,7 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
   <div class="stat"><span>魔石</span><b id="stones">0</b></div>
   <div class="stat"><span>資源</span><b id="resources">0</b></div>
   <div class="stat"><span>掘削力</span><b id="miningPower">0</b></div>
+  <div class="stat"><span>偵察技能</span><b id="scoutingPower">0</b></div>
   <div class="stat"><span>死亡</span><b id="deaths">0</b></div>
 </section>
 
@@ -111,7 +112,7 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <button id="battleStep" class="primary">戦闘開始 / 次へ</button>
     <button id="battleAuto">自軍も自動で進行</button>
   </div>
-  <p class="muted">v0.4では通常攻撃のみ。通常攻撃は最低1ダメージ。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。副官は接近を察知できた場合のみ、経営画面で事前警告します。</p>
+  <p class="muted">v0.5では通常攻撃のみ。通常攻撃は最低1ダメージ。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。偵察班が接近を察知した場合のみ、副官が経営画面で事前警告します。副官適性だけでは敵襲を発見しません。</p>
   <div id="battleLog" class="log"></div>
 </section>
 
@@ -179,10 +180,11 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 </div>
 
 <section class="panel">
-  <div class="row spread"><h2>配下</h2><span class="muted">掘削・防衛・予備を実際に配分</span></div>
+  <div class="row spread"><h2>配下</h2><span class="muted">掘削・防衛・偵察・予備を実際に配分</span></div>
+  <p class="muted">掘削班＝「掘削」、防衛班＝戦闘能力、偵察班＝「技能」を主に使用。偵察の警告がなくても安全とは限りません。現在の事前察知率（テスト値）：<b id="reconChance">10%</b></p>
   <div class="wide">
   <table>
-    <thead><tr><th>配下</th><th>費用</th><th>掘削</th><th>防衛</th><th>予備</th><th>配置変更</th></tr></thead>
+    <thead><tr><th>配下</th><th>費用</th><th>技能</th><th>掘削</th><th>防衛</th><th>偵察</th><th>予備</th><th>配置変更</th></tr></thead>
     <tbody id="unitRows"></tbody>
   </table>
   </div>
@@ -232,6 +234,9 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
       <label>下方掘削倍率 <input id="cfgHardMul" type="number" step=".1" value="1"></label>
       <label>魔石/実掘削量 <input id="cfgStone" type="number" step=".001" value=".05625"></label>
       <label>資源/実掘削量 <input id="cfgResource" type="number" step=".005" value=".125"></label>
+      <label>偵察 基礎成功率% <input id="cfgReconBase" type="number" min="0" max="100" value="10"></label>
+      <label>技能1あたり加算% <input id="cfgReconPerSkill" type="number" min="0" max="100" value="10"></label>
+      <label>偵察成功率上限% <input id="cfgReconCap" type="number" min="0" max="100" value="90"></label>
       <label>侵入者標的
         <select id="cfgEnemyTarget">
           <option value="random">ランダム（暫定）</option>
@@ -264,20 +269,20 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 (() => {
 "use strict";
 
-const KEY="dm-test-integrated-v04";
+const KEY="dm-test-integrated-v05";
 
 const UNIT={
-  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,cost:8,summonable:true},
-  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:11,def:8,mdef:5,spd:12,mining:9,cost:9,summonable:true},
-  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,cost:40,summonable:true},
-  noviceWarriorAlive:{id:"noviceWarriorAlive",name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,cost:null,acquired:true},
-  noviceWarriorUndead:{id:"noviceWarriorUndead",name:"駆け出し戦士（アンデッド）",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,cost:null,acquired:true},
-  regularWarriorAlive:{id:"regularWarriorAlive",name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,cost:null,acquired:true},
-  regularWarriorUndead:{id:"regularWarriorUndead",name:"一般戦士（アンデッド）",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,cost:null,acquired:true},
-  banditAlive:{id:"banditAlive",name:"野党",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,cost:null,acquired:true},
-  banditUndead:{id:"banditUndead",name:"野党（アンデッド）",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,cost:null,acquired:true},
-  banditBossAlive:{id:"banditBossAlive",name:"野党ボス",hp:65,atk:17,def:17,mdef:11,spd:14,mining:18,cost:null,acquired:true},
-  banditBossUndead:{id:"banditBossUndead",name:"野党ボス（アンデッド）",hp:65,atk:17,def:17,mdef:11,spd:14,mining:18,cost:null,acquired:true}
+  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,skill:3,cost:8,summonable:true},
+  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:11,def:8,mdef:5,spd:12,mining:9,skill:1,cost:9,summonable:true},
+  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,skill:1,cost:40,summonable:true},
+  noviceWarriorAlive:{id:"noviceWarriorAlive",name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,skill:1,cost:null,acquired:true},
+  noviceWarriorUndead:{id:"noviceWarriorUndead",name:"駆け出し戦士（アンデッド）",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,skill:1,cost:null,acquired:true},
+  regularWarriorAlive:{id:"regularWarriorAlive",name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,skill:1,cost:null,acquired:true},
+  regularWarriorUndead:{id:"regularWarriorUndead",name:"一般戦士（アンデッド）",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,skill:1,cost:null,acquired:true},
+  banditAlive:{id:"banditAlive",name:"野党",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,skill:2,cost:null,acquired:true},
+  banditUndead:{id:"banditUndead",name:"野党（アンデッド）",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,skill:2,cost:null,acquired:true},
+  banditBossAlive:{id:"banditBossAlive",name:"野党ボス",hp:65,atk:17,def:17,mdef:11,spd:14,mining:18,skill:3,cost:null,acquired:true},
+  banditBossUndead:{id:"banditBossUndead",name:"野党ボス（アンデッド）",hp:65,atk:17,def:17,mdef:11,spd:14,mining:18,skill:3,cost:null,acquired:true}
 };
 const ENEMY={
   noviceWarrior:{name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,baseStone:15},
@@ -300,17 +305,17 @@ const ENCOUNTERS={
 
 function initial(){
   return {
-    version:"0.4-integrated",
+    version:"0.5-integrated",
     sessionId:"DM-"+new Date().toISOString().replace(/\D/g,"").slice(0,14)+"-"+Math.random().toString(36).slice(2,6),
     startedAt:new Date().toISOString(),
     wt:1,started:false,stones:0,resources:0,minedTotal:0,spentTotal:0,resourceTotal:0,deaths:0,battleCount:0,
     area:0,down:0,lowerFound:false,digMode:"explore",floor2Ready:false,floor2ReportPending:false,reachedFloor2:false,reachedAt:null,
     stoneCarry:0,resourceCarry:0,
-    units:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:0,defense:0,reserve:0}])),
-    hpPools:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:[],defense:[],reserve:[]}])),
-    config:{discovery:1600,downNeed:720,normalMul:4,hardMul:1,stoneDensity:.05625,resourceDensity:.125,enemyTarget:"random"},
+    units:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:0,defense:0,scouting:0,reserve:0}])),
+    hpPools:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:[],defense:[],scouting:[],reserve:[]}])),
+    config:{discovery:1600,downNeed:720,normalMul:4,hardMul:1,stoneDensity:.05625,resourceDensity:.125,reconBase:.10,reconPerSkill:.10,reconCap:.90,enemyTarget:"random"},
     seed:20260926,rngState:20260926,
-    seenEnemyTypes:{},assessedEnemyTypes:{},
+    seenEnemyTypes:{},assessedEnemyTypes:{},reconResults:{},
     battle:null,events:[]
   };
 }
@@ -319,8 +324,20 @@ try{S=JSON.parse(localStorage.getItem(KEY))||initial()}catch(e){S=initial()}
 
 const $=id=>document.getElementById(id);
 const clone=o=>JSON.parse(JSON.stringify(o));
-const total=t=>S.units[t].mining+S.units[t].defense+S.units[t].reserve;
+const total=t=>S.units[t].mining+S.units[t].defense+S.units[t].scouting+S.units[t].reserve;
 const miningPower=()=>Object.keys(UNIT).reduce((a,t)=>a+S.units[t].mining*UNIT[t].mining,0);
+const scoutingPower=()=>Object.keys(UNIT).reduce((a,t)=>a+S.units[t].scouting*UNIT[t].skill,0);
+const currentReconChance=()=>Math.min(S.config.reconCap,S.config.reconBase+scoutingPower()*S.config.reconPerSkill);
+function performReconForNextTurn(){
+  const targetWt=S.wt+1;
+  if(!ENCOUNTERS[targetWt]||S.reconResults[targetWt])return;
+  const skill=scoutingPower();
+  const chance=Math.min(S.config.reconCap,S.config.reconBase+skill*S.config.reconPerSkill);
+  const roll=rng();
+  const detected=roll<chance;
+  S.reconResults[targetWt]={checkedAt:S.wt,skill,chance:+chance.toFixed(4),roll:+roll.toFixed(4),detected};
+  event("recon_check",{targetWt,skill,chance:+chance.toFixed(4),roll:+roll.toFixed(4),detected});
+}
 function addOwnedUnit(type,role="reserve",hp=UNIT[type].hp){
   S.units[type][role]++;
   S.hpPools[type][role].push(hp);
@@ -346,7 +363,7 @@ function recoverUnits(){
   let healed=0,units=0;
   for(const [type,roles] of Object.entries(S.hpPools)){
     const max=UNIT[type].hp,step=Math.floor(max*.1);
-    for(const role of ["mining","defense","reserve"]){
+    for(const role of ["mining","defense","scouting","reserve"]){
       roles[role]=roles[role].map(h=>{
         const nh=Math.min(max,h+step);
         if(nh>h){healed+=nh-h;units++}
@@ -383,7 +400,7 @@ function excavateHorizontal(power){
   return dug;
 }
 const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
-const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,floor2Ready:S.floor2Ready,reachedFloor2:S.reachedFloor2,units:clone(S.units),hpPools:clone(S.hpPools),deaths:S.deaths});
+const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),scoutingPower:scoutingPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,floor2Ready:S.floor2Ready,reachedFloor2:S.reachedFloor2,units:clone(S.units),hpPools:clone(S.hpPools),deaths:S.deaths});
 
 function event(type,detail={}){
   S.events.push({seq:S.events.length+1,at:new Date().toISOString(),wt:S.wt,type,detail,state:snap()});
@@ -464,7 +481,7 @@ function endTurn(){
   if(foundNow)event("lower_point_found",{area:+S.area.toFixed(1)});
   if(ENCOUNTERS[S.wt]) startBattle(S.wt);
   else if(S.floor2Ready) triggerFloor2Report();
-  else S.wt++;
+  else {performReconForNextTurn();S.wt++;}
   render();
 }
 
@@ -634,8 +651,8 @@ function unresolvedDispositions(){
 function acquireUnit(enemy,form){
   const map=ACQUIRE_MAP[enemy.key]; if(!map)return false;
   const key=form==="undead"?map.undead:map.alive;
-  if(!S.units[key])S.units[key]={mining:0,defense:0,reserve:0};
-  if(!S.hpPools[key])S.hpPools[key]={mining:[],defense:[],reserve:[]};
+  if(!S.units[key])S.units[key]={mining:0,defense:0,scouting:0,reserve:0};
+  if(!S.hpPools[key])S.hpPools[key]={mining:[],defense:[],scouting:[],reserve:[]};
   addOwnedUnit(key,"reserve",UNIT[key].hp);
   return key;
 }
@@ -723,7 +740,7 @@ function closeBattle(){
   event("battle_debrief_closed",{newEnemyKeys:[...(S.battle.newEnemyKeys||[])]});
   S.battle=null;
   if(S.floor2Ready)triggerFloor2Report();
-  else S.wt++;
+  else {performReconForNextTurn();S.wt++;}
   render();
 }
 
@@ -798,15 +815,10 @@ function battleFactsHtml(){
 }
 function approachWarning(mode,lvl){
   if(lvl<1||S.battle||S.reachedFloor2)return "";
-  const turns=Object.keys(ENCOUNTERS).map(Number).filter(w=>w>=S.wt).sort((a,b)=>a-b);
-  if(!turns.length)return "";
-  const delta=turns[0]-S.wt;
-  if(delta>1)return "";
-  if(mode==="lize"){
-    if(delta===1)return "……何者かがこちらへ向かっているようです。近いうちに、ここまで来るかもしれません。";
-    return "……何者かがかなり近くまで来ているようです。侵入に備えて、守りを確認しておいた方がよいと思います。";
-  }
-  return delta===1?"何者かがダンジョンへ近づいています。侵入に備えてください。":"何者かがすぐ近くまで来ています。防衛配置を確認してください。";
+  const rec=S.reconResults?.[S.wt];
+  if(!rec||!rec.detected)return "";
+  if(mode==="lize")return "……何者かがこちらへ向かっているようです。侵入に備えて、守りを確認しておいた方がよいと思います。";
+  return "偵察班が接近する者を確認しました。侵入に備えてください。";
 }
 function report(){
   const mode=$("lieutenant").value;
@@ -840,10 +852,11 @@ function renderUnits(){
   $("unitRows").innerHTML=Object.entries(UNIT).filter(([k,u])=>u.summonable||total(k)>0).map(([k,u])=>{
     const x=S.units[k];
     const cost=u.summonable?u.cost:(u.name.includes("アンデッド")?"獲得":"加入");
-    return `<tr><td>${esc(u.name)} <span class="muted">(${total(k)})</span></td><td>${cost}</td><td>${x.mining}${roleHpNote(k,"mining")}</td><td>${x.defense}${roleHpNote(k,"defense")}</td><td>${x.reserve}${roleHpNote(k,"reserve")}</td>
+    return `<tr><td>${esc(u.name)} <span class="muted">(${total(k)})</span></td><td>${cost}</td><td>${u.skill}</td><td>${x.mining}${roleHpNote(k,"mining")}</td><td>${x.defense}${roleHpNote(k,"defense")}</td><td>${x.scouting}${roleHpNote(k,"scouting")}</td><td>${x.reserve}${roleHpNote(k,"reserve")}</td>
     <td><div class="row" style="justify-content:center">
       <button data-m="${k},reserve,mining">掘+</button><button data-m="${k},mining,reserve">掘−</button>
       <button data-m="${k},reserve,defense">防+</button><button data-m="${k},defense,reserve">防−</button>
+      <button data-m="${k},reserve,scouting">偵+</button><button data-m="${k},scouting,reserve">偵−</button>
     </div></td></tr>`;
   }).join("");
   document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const [k,f,t]=b.dataset.m.split(",");move(k,f,t)});
@@ -910,7 +923,7 @@ function renderLog(){
 function render(){
   $("floorArrivalPanel").classList.toggle("hidden",!S.floor2ReportPending);
   if(S.floor2ReportPending){$("floorLieutenantCard").innerHTML=lieutenantCardHtml();$("floorLtSpeech").textContent=floor2Speech();}
-  $("wt").textContent=S.started?S.wt:"—";$("stones").textContent=S.stones;$("resources").textContent=S.resources;$("miningPower").textContent=miningPower();$("deaths").textContent=S.deaths;
+  $("wt").textContent=S.started?S.wt:"—";$("stones").textContent=S.stones;$("resources").textContent=S.resources;$("miningPower").textContent=miningPower();$("scoutingPower").textContent=scoutingPower();$("reconChance").textContent=Math.round(currentReconChance()*100)+"%";$("deaths").textContent=S.deaths;
   $("sessionLabel").textContent=S.sessionId;
   const side=Math.min(100,Math.sqrt(S.area));
   $("rangeText").textContent=Math.floor(side)+" × "+Math.floor(side);
@@ -933,13 +946,13 @@ function render(){
 }
 
 function loadConfigInputs(){
-  $("cfgDiscovery").value=S.config.discovery;$("cfgDown").value=S.config.downNeed;$("cfgNormal").value=S.config.normalMul;$("cfgHardMul").value=S.config.hardMul;$("cfgStone").value=S.config.stoneDensity;$("cfgResource").value=S.config.resourceDensity;$("cfgEnemyTarget").value=S.config.enemyTarget;$("seedInput").value=S.seed;
+  $("cfgDiscovery").value=S.config.discovery;$("cfgDown").value=S.config.downNeed;$("cfgNormal").value=S.config.normalMul;$("cfgHardMul").value=S.config.hardMul;$("cfgStone").value=S.config.stoneDensity;$("cfgResource").value=S.config.resourceDensity;$("cfgReconBase").value=Math.round(S.config.reconBase*100);$("cfgReconPerSkill").value=Math.round(S.config.reconPerSkill*100);$("cfgReconCap").value=Math.round(S.config.reconCap*100);$("cfgEnemyTarget").value=S.config.enemyTarget;$("seedInput").value=S.seed;
 }
 function applyConfig(){
   S.config={
     discovery:+$("cfgDiscovery").value,downNeed:+$("cfgDown").value,
     normalMul:+$("cfgNormal").value,hardMul:+$("cfgHardMul").value,
-    stoneDensity:+$("cfgStone").value,resourceDensity:+$("cfgResource").value,enemyTarget:$("cfgEnemyTarget").value
+    stoneDensity:+$("cfgStone").value,resourceDensity:+$("cfgResource").value,reconBase:+$("cfgReconBase").value/100,reconPerSkill:+$("cfgReconPerSkill").value/100,reconCap:+$("cfgReconCap").value/100,enemyTarget:$("cfgEnemyTarget").value
   };
   event("config_change",{config:clone(S.config)});render();
 }
@@ -962,6 +975,7 @@ function summary(){
     "第二層到達="+(S.reachedFloor2?"YES(WT"+S.reachedAt+")":"NO"),
     "魔石="+S.stones+" / 採掘累計="+S.minedTotal+" / 消費累計="+S.spentTotal,
     "資源="+S.resources,
+    "偵察技能="+scoutingPower()+" / 現在察知率="+Math.round(currentReconChance()*100)+"%",
     "死亡="+S.deaths+" / 戦闘="+S.battleCount,
     "概算掘削="+Math.floor(Math.sqrt(S.area))+"x"+Math.floor(Math.sqrt(S.area)),
     "下層="+Math.floor(S.down)+"/"+S.config.downNeed,
