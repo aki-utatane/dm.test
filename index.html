@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e11">
-<title>DM.TEST — 第一層 統合テスト</title>
+<title>DM.TEST — 第一層 統合テスト v0.2</title>
 <style>
 :root{
   color-scheme:dark;
@@ -29,6 +29,16 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 5px;b
 .bar{height:14px;background:#090c0e;border:1px solid #2d363e;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#65866a,#9ec5a2)}
 .badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:12px}.badge.good{border-color:#4f7356;color:#a9d3af}.badge.warn{border-color:#745e35;color:#efcf8e}.badge.bad{border-color:#754747;color:#efabab}
 .report{white-space:pre-wrap;background:#0f1418;border-left:3px solid #64856b;border-radius:6px;padding:10px 12px;min-height:58px}
+.lt-report{display:grid;grid-template-columns:112px 1fr;gap:12px;align-items:stretch}
+.lt-card{background:linear-gradient(180deg,#20272e,#11161a);border:1px solid #46535d;border-radius:10px;overflow:hidden;min-height:148px}
+.lt-portrait{height:92px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,#37434c,#171d22 70%);font-weight:700;font-size:18px;letter-spacing:.08em}
+.lt-meta{padding:7px 8px}.lt-meta b{display:block}.lt-meta small{display:block}
+.lt-speech{position:relative;background:#0f1418;border:1px solid #35414a;border-radius:10px;padding:11px 12px;min-height:100px;white-space:pre-wrap}
+.lt-speech:before{content:"";position:absolute;left:-8px;top:22px;border-width:8px 8px 8px 0;border-style:solid;border-color:transparent #35414a transparent transparent}
+.resultbox{background:#101519;border:1px solid #3b4650;border-radius:10px;padding:10px;margin-top:12px}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.result-list{font-size:13px;line-height:1.65}
+@media(max-width:520px){.lt-report{grid-template-columns:88px 1fr}.lt-portrait{height:76px}.lt-card{min-height:126px}}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px}
 .card{background:#101519;border:1px solid #34404a;border-radius:10px;padding:9px}.card.active{outline:2px solid var(--warn)}.card.dead{opacity:.35}
 .hp{height:8px;background:#232a30;border-radius:8px;overflow:hidden;margin:6px 0}.hp i{display:block;height:100%;background:#799f7f}
@@ -71,6 +81,22 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
   <h3 style="margin-top:12px">防衛側</h3>
   <div id="allyCards" class="cards"></div>
 
+  <div id="battleLieutenant" class="resultbox hidden">
+    <div class="lt-report">
+      <div id="battleLieutenantCard"></div>
+      <div>
+        <div id="battleLtLabel" class="muted" style="font-size:12px;margin-bottom:5px">警告</div>
+        <div id="battleLtSpeech" class="lt-speech">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="battleResultBox" class="resultbox hidden">
+    <h3>戦闘結果</h3>
+    <div id="battleFacts" class="result-grid"></div>
+    <div id="battleAssessment" class="hidden" style="margin-top:10px"></div>
+  </div>
+
   <div id="playerAction" class="panel hidden" style="margin-top:12px;background:#11171b">
     <div id="actorText" style="margin-bottom:8px"></div>
     <div id="targetButtons" class="row"></div>
@@ -80,7 +106,7 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <button id="battleStep" class="primary">戦闘開始 / 次へ</button>
     <button id="battleAuto">自軍も自動で進行</button>
   </div>
-  <p class="muted">v0.1では通常攻撃のみ。撤退・降伏・罠・特殊能力は未実装。固定侵入者のアライメント未決定のため、侵入者の標的規則は下のテスト設定で変更可能です。</p>
+  <p class="muted">v0.2では通常攻撃のみ。撤退・降伏・罠・特殊能力は未実装。初見の敵は副官が注意喚起しますが、事前察知できていない戦闘では配置変更を促す助言はしません。</p>
   <div id="battleLog" class="log"></div>
 </section>
 
@@ -108,17 +134,25 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
   </section>
 
   <section class="panel">
-    <h2>副官報告</h2>
-    <select id="lieutenant">
-      <option value="0">適性0</option>
-      <option value="1">一般・適性1</option>
-      <option value="2">一般・適性2</option>
-      <option value="3">一般・適性3</option>
-      <option value="4">一般・適性4</option>
-      <option value="5">一般・適性5</option>
-      <option value="lize">リゼ・適性5</option>
-    </select>
-    <div id="report" class="report" style="margin-top:10px">—</div>
+    <div class="row spread">
+      <h2>副官報告</h2>
+      <select id="lieutenant">
+        <option value="0">適性0</option>
+        <option value="1">一般・適性1</option>
+        <option value="2">一般・適性2</option>
+        <option value="3">一般・適性3</option>
+        <option value="4">一般・適性4</option>
+        <option value="5">一般・適性5</option>
+        <option value="lize">リゼ・適性5</option>
+      </select>
+    </div>
+    <div class="lt-report">
+      <div id="lieutenantCard"></div>
+      <div>
+        <div class="muted" style="font-size:12px;margin-bottom:5px">経営報告</div>
+        <div id="report" class="lt-speech">—</div>
+      </div>
+    </div>
   </section>
 </div>
 
@@ -208,7 +242,7 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 (() => {
 "use strict";
 
-const KEY="dm-test-integrated-v01";
+const KEY="dm-test-integrated-v02";
 
 const UNIT={
   kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,cost:8},
@@ -239,6 +273,7 @@ function initial(){
     units:{kobold:{mining:0,defense:0,reserve:0},goblin:{mining:0,defense:0,reserve:0},hob:{mining:0,defense:0,reserve:0}},
     config:{discovery:1600,hardAt:2500,downNeed:720,normalMul:4,hardMul:1,stoneRate:.225,resourceRate:.5,enemyTarget:"random"},
     seed:20260926,rngState:20260926,
+    seenEnemyTypes:{},assessedEnemyTypes:{},
     battle:null,events:[]
   };
 }
@@ -271,9 +306,10 @@ function roll2d6(){const a=d6(),b=d6();return {a,b,total:a+b}}
 function status(hp,max){
   const r=hp/max;
   if(hp<=0)return "死亡";
+  if(hp>=max)return "無傷";
   if(r<=.2)return "瀕死";
   if(r<=.4)return "重傷";
-  return "通常";
+  return "軽傷";
 }
 
 function tutorial(){
@@ -341,6 +377,9 @@ function makeCombatant(side,key,index,sourceType=null){
 
 function startBattle(wt){
   const e=ENCOUNTERS[wt];
+  const uniqueEnemyKeys=[...new Set(e.units)];
+  const newEnemyKeys=uniqueEnemyKeys.filter(k=>!S.seenEnemyTypes[k]);
+  uniqueEnemyKeys.forEach(k=>S.seenEnemyTypes[k]=true);
   const enemies=e.units.map((k,i)=>makeCombatant("enemy",k,i));
   const deck=[];
   let idx=0;
@@ -348,7 +387,7 @@ function startBattle(wt){
     for(let i=0;i<S.units[t].defense;i++)deck.push(makeCombatant("ally",t,idx++,t));
   }
   S.battle={
-    wt,encounter:e.name,round:0,enemies,
+    wt,encounter:e.name,round:0,enemies,newEnemyKeys,
     allyDeck:deck,allies:deck.splice(0,4),
     order:[],cursor:0,waiting:false,activeUid:null,autoAllies:false,
     log:[],finished:false,result:null
@@ -359,7 +398,7 @@ function startBattle(wt){
     finishBattle("防衛突破");
     return;
   }
-  event("battle_start",{encounter:e.name,defenders:S.battle.allies.concat(S.battle.allyDeck).map(x=>x.key),enemyTarget:S.config.enemyTarget,seedState:S.rngState});
+  event("battle_start",{encounter:e.name,defenders:S.battle.allies.concat(S.battle.allyDeck).map(x=>x.key),enemyTarget:S.config.enemyTarget,newEnemyKeys:[...newEnemyKeys],seedState:S.rngState});
 }
 
 function blog(msg){
@@ -466,8 +505,10 @@ function finishBattle(result){
   blog("戦闘結果："+result);
   event("battle_result",{
     encounter:S.battle.encounter,result,
-    enemySurvivors:living(S.battle.enemies).map(x=>({name:x.name,hp:x.hp})),
-    allySurvivors:living(S.battle.allies).map(x=>({name:x.name,hp:x.hp})),
+    newEnemyKeys:[...(S.battle.newEnemyKeys||[])],
+    enemySurvivors:living(S.battle.enemies).map(x=>({name:x.name,hp:x.hp,status:status(x.hp,x.maxHp)})),
+    allySurvivors:living(S.battle.allies).map(x=>({name:x.name,hp:x.hp,status:status(x.hp,x.maxHp)})),
+    allyDead:S.battle.allies.filter(x=>!x.alive).map(x=>x.name),
     allyQueued:S.battle.allyDeck.length
   });
   render();
@@ -475,9 +516,73 @@ function finishBattle(result){
 
 function closeBattle(){
   if(!S.battle||!S.battle.finished)return;
+  (S.battle.newEnemyKeys||[]).forEach(k=>S.assessedEnemyTypes[k]=true);
+  event("battle_debrief_closed",{newEnemyKeys:[...(S.battle.newEnemyKeys||[])]});
   S.battle=null;S.wt++;render();
 }
 
+function lieutenantInfo(){
+  const mode=$("lieutenant").value;
+  if(mode==="lize")return {mode,name:"リゼ",aptitude:5,portrait:"リゼ"};
+  if(mode==="0")return {mode,name:"副官適性なし",aptitude:0,portrait:"？"};
+  return {mode,name:"副官（一般）",aptitude:+mode,portrait:"副官"};
+}
+function lieutenantCardHtml(){
+  const x=lieutenantInfo();
+  return '<div class="lt-card"><div class="lt-portrait">'+esc(x.portrait)+'</div><div class="lt-meta"><b>'+esc(x.name)+'</b><small>副官適性 '+x.aptitude+'</small><small class="muted">TEST CARD</small></div></div>';
+}
+function battleWarningText(){
+  const b=S.battle;if(!b||!b.newEnemyKeys||!b.newEnemyKeys.length)return "";
+  const info=lieutenantInfo();
+  if(info.aptitude===0)return "ギギ……ギ……";
+  if(info.mode==="lize")return "……見たことのない相手がいます。お気をつけを。";
+  return "見たことのない相手がいます。注意してください。";
+}
+function assessmentForKey(k){
+  if(k==="noviceWarrior")return "駆け出しの冒険者一人なら、ゴブリン二体ほどで対応できそうです。";
+  if(k==="regularWarrior")return "先ほどの相手は、駆け出しより腕が立ちます。ゴブリンだけでは厳しいかもしれません。";
+  if(k==="bandit")return "動きは駆け出しの冒険者に近いようです。数を揃えればゴブリンでも対応できそうですが、油断はできません。";
+  if(k==="banditBoss")return "先ほどの相手は、これまでの野党より腕が立ちます。ゴブリンだけでは厳しいかもしれません。";
+  return "今回の結果だけでは、まだ判断が難しい相手です。";
+}
+function battleResultSpeech(){
+  const b=S.battle;if(!b||!b.finished)return "";
+  const info=lieutenantInfo();
+  if(info.aptitude===0)return "ギギ……ギ……";
+  const deadAllies=b.allies.filter(x=>!x.alive).length;
+  const damaged=living(b.allies).filter(x=>x.hp<x.maxHp);
+  const serious=damaged.filter(x=>x.hp/x.maxHp<=.4).length;
+  let base=(b.result==="撃退"?"撃退しました。":"防衛線を突破されました。");
+  if(deadAllies)base+=" こちらは"+deadAllies+"体を失っています。";
+  else base+=" こちらに死者はいません。";
+  if(serious)base+=" 重傷以上が"+serious+"体います。";
+  else if(damaged.length)base+=" 負傷者はいますが、重傷者はいません。";
+  else base+=" 全員無傷です。";
+  if(info.mode==="lize"){
+    base=base.replace("撃退しました。","……撃退できました。")
+             .replace("防衛線を突破されました。","……防衛線を突破されました。")
+             .replace("こちらは"," こちらは")
+             .replace("こちらに死者はいません。"," こちらに死者はいません。");
+  }
+  return base;
+}
+function battleAssessmentText(){
+  const b=S.battle;if(!b||!b.finished||!b.newEnemyKeys||!b.newEnemyKeys.length)return "";
+  const info=lieutenantInfo();
+  if(info.aptitude<3)return "";
+  const keys=b.newEnemyKeys.filter(k=>!S.assessedEnemyTypes[k]);
+  if(!keys.length)return "";
+  const lines=keys.map(k=>assessmentForKey(k));
+  return (info.mode==="lize"?"今回の相手についてですが……\n":"今回の相手について：\n")+lines.join("\n");
+}
+function battleFactsHtml(){
+  const b=S.battle;if(!b)return "";
+  const enemyGroups={};
+  b.enemies.forEach(x=>{const k=x.key;enemyGroups[k]??={name:x.name,total:0,dead:0,alive:0};enemyGroups[k].total++;x.alive?enemyGroups[k].alive++:enemyGroups[k].dead++});
+  const allyRows=b.allies.map(x=>'<div>'+esc(x.name)+'　'+x.hp+'/'+x.maxHp+'　<span class="badge">'+esc(status(x.hp,x.maxHp))+'</span></div>').join("");
+  const enemyRows=Object.values(enemyGroups).map(g=>'<div>'+esc(g.name)+' ×'+g.total+'　死亡 '+g.dead+' / 生存 '+g.alive+'</div>').join("");
+  return '<div><b>侵入者</b><div class="result-list">'+enemyRows+'</div></div><div><b>こちら</b><div class="result-list">'+allyRows+'</div></div>';
+}
 function report(){
   const mode=$("lieutenant").value;
   if(mode==="0")return "ギギ……ギ……";
@@ -536,7 +641,24 @@ function renderBattle(){
   $("enemyCards").innerHTML=b.enemies.map(cardHtml).join("");
   $("allyCards").innerHTML=b.allies.map(cardHtml).join("")+(b.allyDeck.length?`<div class="card"><b>防衛山札</b><div>${b.allyDeck.length}体待機</div></div>`:"");
   $("battleLog").innerHTML=b.log.slice().reverse().map(x=>"<div>"+esc(x)+"</div>").join("");
-  $("battleStep").textContent=b.finished?"戦闘を終了して次WTへ":"戦闘開始 / 次へ";
+
+  $("battleLieutenantCard").innerHTML=lieutenantCardHtml();
+  const warn=battleWarningText();
+  const resultSpeech=battleResultSpeech();
+  const showLt=!!warn||!!resultSpeech;
+  $("battleLieutenant").classList.toggle("hidden",!showLt);
+  $("battleLtLabel").textContent=b.finished?"戦果報告":"警告";
+  $("battleLtSpeech").textContent=b.finished?resultSpeech:warn;
+
+  $("battleResultBox").classList.toggle("hidden",!b.finished);
+  if(b.finished){
+    $("battleFacts").innerHTML=battleFactsHtml();
+    const assess=battleAssessmentText();
+    $("battleAssessment").classList.toggle("hidden",!assess);
+    $("battleAssessment").innerHTML=assess?'<div class="muted" style="font-size:12px;margin-bottom:5px">初遭遇講評</div><div class="lt-speech">'+esc(assess)+'</div>':"";
+  }
+
+  $("battleStep").textContent=b.finished?"戦後処理を終了して次WTへ":"戦闘開始 / 次へ";
   $("battleAuto").textContent=b.autoAllies?"自軍自動：ON":"自軍も自動で進行";
   $("playerAction").classList.toggle("hidden",!b.waiting||b.finished);
   if(b.waiting&&!b.finished){
@@ -568,6 +690,7 @@ function render(){
   $("startTutorial").disabled=S.started;$("endTurn").disabled=!S.started||!!S.battle||S.reachedFloor2;
   $("summonKobold").disabled=!S.started||S.stones<8||!!S.battle;$("summonGoblin").disabled=!S.started||S.stones<9||!!S.battle;$("summonHob").disabled=!S.started||S.stones<40||!!S.battle;
   $("minedTotal").textContent=S.minedTotal;$("spentTotal").textContent=S.spentTotal;$("resourceTotal").textContent=S.resourceTotal;$("battleCount").textContent=S.battleCount;$("reached").textContent=S.reachedFloor2?"WT"+S.reachedAt:"—";
+  $("lieutenantCard").innerHTML=lieutenantCardHtml();
   $("report").textContent=report();
   renderUnits();renderBattle();renderLog();save();
 }
