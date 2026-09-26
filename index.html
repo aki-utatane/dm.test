@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e11">
-<title>DM.TEST — 第一層 統合テスト v0.2</title>
+<title>DM.TEST — 第一層 統合テスト v0.3</title>
 <style>
 :root{
   color-scheme:dark;
@@ -95,19 +95,41 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <h3>戦闘結果</h3>
     <div id="battleFacts" class="result-grid"></div>
     <div id="battleAssessment" class="hidden" style="margin-top:10px"></div>
+    <div id="battleDisposition" class="hidden" style="margin-top:10px">
+      <div class="muted" style="font-size:12px;margin-bottom:5px">戦後処理</div>
+      <div id="dispositionRows" class="stack"></div>
+      <p class="muted">死亡した冒険者は基準魔石を消費してアンデッド化できます。アンデッド化後も生前の能力値を引き継ぎます。捕縛者の配下加入判定は未確定のため、このテストでは「加入成功扱い」を選択できます。</p>
+    </div>
   </div>
 
   <div id="playerAction" class="panel hidden" style="margin-top:12px;background:#11171b">
     <div id="actorText" style="margin-bottom:8px"></div>
-    <div id="targetButtons" class="row"></div>
+    <div id="targetButtons" class="row"></div><div id="captureButtons" class="row" style="margin-top:8px"></div>
   </div>
 
   <div class="row" style="margin-top:12px">
     <button id="battleStep" class="primary">戦闘開始 / 次へ</button>
     <button id="battleAuto">自軍も自動で進行</button>
   </div>
-  <p class="muted">v0.2では通常攻撃のみ。撤退・降伏・罠・特殊能力は未実装。初見の敵は副官が注意喚起しますが、事前察知できていない戦闘では配置変更を促す助言はしません。</p>
+  <p class="muted">v0.3では通常攻撃のみ。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。初見の敵への副官発言は注意喚起に限定し、事前察知していない戦闘では配置変更を促しません。</p>
   <div id="battleLog" class="log"></div>
+</section>
+
+<section id="floorArrivalPanel" class="panel hidden" style="border-color:#55735d">
+  <div class="row spread">
+    <h2>第二層到達</h2>
+    <span class="badge good">FLOOR 2</span>
+  </div>
+  <div class="lt-report">
+    <div id="floorLieutenantCard"></div>
+    <div>
+      <div class="muted" style="font-size:12px;margin-bottom:5px">副官報告</div>
+      <div id="floorLtSpeech" class="lt-speech">—</div>
+      <div class="row" style="margin-top:10px">
+        <button id="ackFloor2" class="primary">確認</button>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section id="managementPanels">
@@ -242,18 +264,32 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 (() => {
 "use strict";
 
-const KEY="dm-test-integrated-v02";
+const KEY="dm-test-integrated-v03";
 
 const UNIT={
-  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,cost:8},
-  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:10,def:8,mdef:5,spd:12,mining:9,cost:9},
-  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,cost:40}
+  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,cost:8,summonable:true},
+  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:10,def:8,mdef:5,spd:12,mining:9,cost:9,summonable:true},
+  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,cost:40,summonable:true},
+  noviceWarriorAlive:{id:"noviceWarriorAlive",name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,cost:null,acquired:true},
+  noviceWarriorUndead:{id:"noviceWarriorUndead",name:"駆け出し戦士（アンデッド）",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,cost:null,acquired:true},
+  regularWarriorAlive:{id:"regularWarriorAlive",name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,cost:null,acquired:true},
+  regularWarriorUndead:{id:"regularWarriorUndead",name:"一般戦士（アンデッド）",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,cost:null,acquired:true},
+  banditAlive:{id:"banditAlive",name:"野党",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,cost:null,acquired:true},
+  banditUndead:{id:"banditUndead",name:"野党（アンデッド）",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,cost:null,acquired:true},
+  banditBossAlive:{id:"banditBossAlive",name:"野党ボス",hp:55,atk:15,def:15,mdef:10,spd:14,mining:18,cost:null,acquired:true},
+  banditBossUndead:{id:"banditBossUndead",name:"野党ボス（アンデッド）",hp:55,atk:15,def:15,mdef:10,spd:14,mining:18,cost:null,acquired:true}
 };
 const ENEMY={
-  noviceWarrior:{name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10},
-  regularWarrior:{name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10},
-  bandit:{name:"野党",hp:40,atk:12,def:11,mdef:8,spd:13},
-  banditBoss:{name:"野党ボス",hp:55,atk:15,def:15,mdef:10,spd:14}
+  noviceWarrior:{name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,baseStone:15},
+  regularWarrior:{name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,baseStone:25},
+  bandit:{name:"野党",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,baseStone:18},
+  banditBoss:{name:"野党ボス",hp:55,atk:15,def:15,mdef:10,spd:14,mining:18,baseStone:30}
+};
+const ACQUIRE_MAP={
+  noviceWarrior:{alive:"noviceWarriorAlive",undead:"noviceWarriorUndead"},
+  regularWarrior:{alive:"regularWarriorAlive",undead:"regularWarriorUndead"},
+  bandit:{alive:"banditAlive",undead:"banditUndead"},
+  banditBoss:{alive:"banditBossAlive",undead:"banditBossUndead"}
 };
 const ENCOUNTERS={
   7:{name:"駆け出し戦士 ×2",units:["noviceWarrior","noviceWarrior"]},
@@ -264,13 +300,13 @@ const ENCOUNTERS={
 
 function initial(){
   return {
-    version:"0.1-integrated",
+    version:"0.3-integrated",
     sessionId:"DM-"+new Date().toISOString().replace(/\D/g,"").slice(0,14)+"-"+Math.random().toString(36).slice(2,6),
     startedAt:new Date().toISOString(),
     wt:1,started:false,stones:0,resources:0,minedTotal:0,spentTotal:0,resourceTotal:0,deaths:0,battleCount:0,
-    area:0,down:0,lowerFound:false,digMode:"explore",reachedFloor2:false,reachedAt:null,
+    area:0,down:0,lowerFound:false,digMode:"explore",floor2Ready:false,floor2ReportPending:false,reachedFloor2:false,reachedAt:null,
     stoneCarry:0,resourceCarry:0,
-    units:{kobold:{mining:0,defense:0,reserve:0},goblin:{mining:0,defense:0,reserve:0},hob:{mining:0,defense:0,reserve:0}},
+    units:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:0,defense:0,reserve:0}])),
     config:{discovery:1600,hardAt:2500,downNeed:720,normalMul:4,hardMul:1,stoneRate:.225,resourceRate:.5,enemyTarget:"random"},
     seed:20260926,rngState:20260926,
     seenEnemyTypes:{},assessedEnemyTypes:{},
@@ -285,7 +321,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const total=t=>S.units[t].mining+S.units[t].defense+S.units[t].reserve;
 const miningPower=()=>Object.keys(UNIT).reduce((a,t)=>a+S.units[t].mining*UNIT[t].mining,0);
 const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
-const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,reachedFloor2:S.reachedFloor2,units:clone(S.units),deaths:S.deaths});
+const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,floor2Ready:S.floor2Ready,reachedFloor2:S.reachedFloor2,units:clone(S.units),deaths:S.deaths});
 
 function event(type,detail={}){
   S.events.push({seq:S.events.length+1,at:new Date().toISOString(),wt:S.wt,type,detail,state:snap()});
@@ -344,12 +380,12 @@ function miningYield(p){
 }
 
 function endTurn(){
-  if(!S.started||S.battle||S.reachedFloor2)return;
+  if(!S.started||S.battle||S.reachedFloor2||S.floor2ReportPending)return;
   const p=miningPower();
   let progress=0,foundNow=false,hard=false;
   if(S.digMode==="down"&&S.lowerFound){
     hard=true;progress=p*S.config.hardMul;S.down=Math.min(S.config.downNeed,S.down+progress);
-    if(S.down>=S.config.downNeed){S.reachedFloor2=true;S.reachedAt=S.wt}
+    if(S.down>=S.config.downNeed)S.floor2Ready=true;
   }else{
     hard=S.area>=S.config.hardAt;
     progress=p*(hard?S.config.hardMul:S.config.normalMul);
@@ -357,10 +393,10 @@ function endTurn(){
     if(!S.lowerFound&&S.area>=S.config.discovery){S.lowerFound=true;foundNow=true}
   }
   const gain=miningYield(p);
-  event("turn_result",{power:p,mode:S.digMode,hard,progress:+progress.toFixed(1),stone:gain.stone,resource:gain.resource,foundLower:foundNow,reachedFloor2:S.reachedFloor2});
+  event("turn_result",{power:p,mode:S.digMode,hard,progress:+progress.toFixed(1),stone:gain.stone,resource:gain.resource,foundLower:foundNow,floor2Ready:S.floor2Ready});
   if(foundNow)event("lower_point_found",{area:+S.area.toFixed(1)});
-  if(S.reachedFloor2){event("floor2_reached",{wt:S.wt});render();return}
   if(ENCOUNTERS[S.wt]) startBattle(S.wt);
+  else if(S.floor2Ready) triggerFloor2Report();
   else S.wt++;
   render();
 }
@@ -371,7 +407,7 @@ function makeCombatant(side,key,index,sourceType=null){
     uid:side+"-"+S.wt+"-"+index+"-"+Math.floor(rng()*1e8),
     side,key,sourceType:sourceType||key,name:src.name,index,
     maxHp:src.hp,hp:src.hp,atk:src.atk,def:src.def,mdef:src.mdef,spd:src.spd,
-    alive:true
+    alive:true,captured:false,disposition:null
   };
 }
 
@@ -383,7 +419,7 @@ function startBattle(wt){
   const enemies=e.units.map((k,i)=>makeCombatant("enemy",k,i));
   const deck=[];
   let idx=0;
-  for(const t of ["hob","goblin","kobold"]){
+  for(const t of Object.keys(UNIT)){
     for(let i=0;i<S.units[t].defense;i++)deck.push(makeCombatant("ally",t,idx++,t));
   }
   S.battle={
@@ -406,7 +442,7 @@ function blog(msg){
   S.battle.log.push(msg);
 }
 
-function living(arr){return arr.filter(x=>x.alive&&x.hp>0)}
+function living(arr){return arr.filter(x=>x.alive&&x.hp>0&&!x.captured)}
 function fillAllies(){
   if(!S.battle)return;
   while(living(S.battle.allies).length<4 && S.battle.allyDeck.length){
@@ -499,6 +535,88 @@ function playerAttack(targetUid){
   render();
 }
 
+function captureEnemy(uid){
+  if(!S.battle||S.battle.finished)return;
+  const t=findActor(uid);
+  if(!t||t.side!=="enemy"||!t.alive||t.captured||t.hp/t.maxHp>.2)return;
+  t.captured=true;
+  blog(t.name+" を捕縛した。");
+  event("enemy_captured",{enemy:t.key,name:t.name,hp:t.hp});
+  if(!checkBattleEnd())processUntilChoice();
+  render();
+}
+function unresolvedDispositions(){
+  if(!S.battle||!S.battle.finished)return [];
+  return S.battle.enemies.filter(x=>(!x.alive||x.captured)&&!x.disposition);
+}
+function acquireUnit(enemy,form){
+  const map=ACQUIRE_MAP[enemy.key]; if(!map)return false;
+  const key=form==="undead"?map.undead:map.alive;
+  if(!S.units[key])S.units[key]={mining:0,defense:0,reserve:0};
+  S.units[key].reserve++;
+  return key;
+}
+function undeadEnemy(uid){
+  const e=findActor(uid);
+  if(!S.battle||!S.battle.finished||!e||e.alive||e.disposition)return;
+  const cost=ENEMY[e.key].baseStone;
+  if(S.stones<cost){event("undead_failed",{enemy:e.key,reason:"insufficient_stone",required:cost,stones:S.stones});alert("魔石が足りないようだ…");return}
+  S.stones-=cost;S.spentTotal+=cost;
+  const unit=acquireUnit(e,"undead");e.disposition="undead";
+  event("enemy_undead",{enemy:e.key,unit,cost});render();
+}
+function recruitCaptured(uid){
+  const e=findActor(uid);
+  if(!S.battle||!S.battle.finished||!e||!e.captured||e.disposition)return;
+  const unit=acquireUnit(e,"alive");e.disposition="recruited";
+  event("enemy_recruited_test",{enemy:e.key,unit,note:"negotiation formula open; treated as success in test"});render();
+}
+function discardEnemy(uid){
+  const e=findActor(uid);
+  if(!S.battle||!S.battle.finished||!e||e.disposition)return;
+  e.disposition="none";event("enemy_disposition_none",{enemy:e.key,captured:e.captured});render();
+}
+function killCaptured(uid){
+  const e=findActor(uid);
+  if(!S.battle||!S.battle.finished||!e||!e.captured||e.disposition)return;
+  e.captured=false;e.alive=false;e.hp=0;
+  event("captured_enemy_killed",{enemy:e.key});render();
+}
+function dispositionHtml(){
+  const b=S.battle;if(!b||!b.finished)return "";
+  return b.enemies.filter(e=>!e.alive||e.captured).map(e=>{
+    const cost=ENEMY[e.key].baseStone;
+    const done=e.disposition?'<span class="badge good">処理済み：'+esc(e.disposition)+'</span>':"";
+    if(e.disposition)return '<div class="card"><b>'+esc(e.name)+'</b> '+done+'</div>';
+    if(e.captured){
+      return '<div class="card"><div class="row spread"><b>'+esc(e.name)+'</b><span class="badge warn">捕縛</span></div><div class="row" style="margin-top:8px"><button data-recruit="'+e.uid+'">配下加入（テスト成功扱い）</button><button data-killcaptured="'+e.uid+'">殺害</button><button data-discard="'+e.uid+'">解放</button></div></div>';
+    }
+    return '<div class="card"><div class="row spread"><b>'+esc(e.name)+'</b><span class="badge bad">死亡</span></div><div class="row" style="margin-top:8px"><button data-undead="'+e.uid+'" '+(S.stones<cost?'disabled':'')+'>アンデッド化 -'+cost+'魔石</button><button data-discard="'+e.uid+'">処理しない</button></div></div>';
+  }).join("");
+}
+function bindDispositionButtons(){
+  document.querySelectorAll("[data-undead]").forEach(b=>b.onclick=()=>undeadEnemy(b.dataset.undead));
+  document.querySelectorAll("[data-recruit]").forEach(b=>b.onclick=()=>recruitCaptured(b.dataset.recruit));
+  document.querySelectorAll("[data-killcaptured]").forEach(b=>b.onclick=()=>killCaptured(b.dataset.killcaptured));
+  document.querySelectorAll("[data-discard]").forEach(b=>b.onclick=()=>discardEnemy(b.dataset.discard));
+}
+function floor2Speech(){
+  const info=lieutenantInfo();
+  if(info.aptitude===0)return "ギギ……ギ……！";
+  if(info.mode==="lize")return "……第二層へ続く道が開きました。これで、先へ進めます。";
+  return "第二層へ続く坑道が通りました。先へ進めます。";
+}
+function triggerFloor2Report(){
+  if(!S.floor2Ready||S.reachedFloor2)return;
+  S.floor2ReportPending=true;
+  event("floor2_report",{wt:S.wt});render();
+}
+function acknowledgeFloor2(){
+  if(!S.floor2ReportPending)return;
+  S.floor2ReportPending=false;S.reachedFloor2=true;S.reachedAt=S.wt;
+  event("floor2_reached",{wt:S.wt});render();
+}
+
 function finishBattle(result){
   if(!S.battle||S.battle.finished)return;
   S.battle.finished=true;S.battle.result=result;
@@ -516,9 +634,13 @@ function finishBattle(result){
 
 function closeBattle(){
   if(!S.battle||!S.battle.finished)return;
+  if(unresolvedDispositions().length){alert("戦後処理が終わっていない対象があります。");return}
   (S.battle.newEnemyKeys||[]).forEach(k=>S.assessedEnemyTypes[k]=true);
   event("battle_debrief_closed",{newEnemyKeys:[...(S.battle.newEnemyKeys||[])]});
-  S.battle=null;S.wt++;render();
+  S.battle=null;
+  if(S.floor2Ready)triggerFloor2Report();
+  else S.wt++;
+  render();
 }
 
 function lieutenantInfo(){
@@ -535,15 +657,22 @@ function battleWarningText(){
   const b=S.battle;if(!b||!b.newEnemyKeys||!b.newEnemyKeys.length)return "";
   const info=lieutenantInfo();
   if(info.aptitude===0)return "ギギ……ギ……";
-  if(info.mode==="lize")return "……見たことのない相手がいます。お気をつけを。";
-  return "見たことのない相手がいます。注意してください。";
+  const keys=b.newEnemyKeys;
+  if(info.mode==="lize"){
+    if(keys.includes("banditBoss"))return "……野党の中に、これまでより腕の立ちそうな者がいます。お気をつけください。";
+    if(keys.includes("bandit"))return "……冒険者ではないようです。野党が侵入しています。お気をつけください。";
+    if(keys.includes("regularWarrior"))return "……先ほどまでの冒険者とは様子が違います。お気をつけください。";
+    return "……見たことのない冒険者がいます。お気をつけください。";
+  }
+  if(keys.includes("bandit"))return "野党が侵入しています。注意してください。";
+  return "見覚えのない冒険者がいます。注意してください。";
 }
 function assessmentForKey(k){
-  if(k==="noviceWarrior")return "駆け出しの冒険者一人なら、ゴブリン二体ほどで対応できそうです。";
-  if(k==="regularWarrior")return "先ほどの相手は、駆け出しより腕が立ちます。ゴブリンだけでは厳しいかもしれません。";
-  if(k==="bandit")return "動きは駆け出しの冒険者に近いようです。数を揃えればゴブリンでも対応できそうですが、油断はできません。";
-  if(k==="banditBoss")return "先ほどの相手は、これまでの野党より腕が立ちます。ゴブリンだけでは厳しいかもしれません。";
-  return "今回の結果だけでは、まだ判断が難しい相手です。";
+  if(k==="noviceWarrior")return "駆け出しの冒険者一体であれば、ゴブリン二体で対応できそうです。";
+  if(k==="regularWarrior")return "一般の戦士一体を相手にするには、ゴブリンだけでは厳しいかもしれません。";
+  if(k==="bandit")return "野党一体であれば、駆け出しの冒険者と大きな差はなさそうです。ただし、罠への対応は冒険者とは異なるようです。";
+  if(k==="banditBoss")return "野党の頭目は、一般の野党より明らかに手強いようです。ゴブリンだけで対応するのは難しいと思います。";
+  return "今回の戦闘だけでは、まだ戦力を判断しきれません。";
 }
 function battleResultSpeech(){
   const b=S.battle;if(!b||!b.finished)return "";
@@ -578,9 +707,9 @@ function battleAssessmentText(){
 function battleFactsHtml(){
   const b=S.battle;if(!b)return "";
   const enemyGroups={};
-  b.enemies.forEach(x=>{const k=x.key;enemyGroups[k]??={name:x.name,total:0,dead:0,alive:0};enemyGroups[k].total++;x.alive?enemyGroups[k].alive++:enemyGroups[k].dead++});
+  b.enemies.forEach(x=>{const k=x.key;enemyGroups[k]??={name:x.name,total:0,dead:0,alive:0,captured:0};enemyGroups[k].total++;if(x.captured)enemyGroups[k].captured++;else if(x.alive)enemyGroups[k].alive++;else enemyGroups[k].dead++});
   const allyRows=b.allies.map(x=>'<div>'+esc(x.name)+'　'+x.hp+'/'+x.maxHp+'　<span class="badge">'+esc(status(x.hp,x.maxHp))+'</span></div>').join("");
-  const enemyRows=Object.values(enemyGroups).map(g=>'<div>'+esc(g.name)+' ×'+g.total+'　死亡 '+g.dead+' / 生存 '+g.alive+'</div>').join("");
+  const enemyRows=Object.values(enemyGroups).map(g=>'<div>'+esc(g.name)+' ×'+g.total+'　死亡 '+g.dead+' / 捕縛 '+g.captured+' / 生存 '+g.alive+'</div>').join("");
   return '<div><b>侵入者</b><div class="result-list">'+enemyRows+'</div></div><div><b>こちら</b><div class="result-list">'+allyRows+'</div></div>';
 }
 function report(){
@@ -611,9 +740,10 @@ function report(){
 }
 
 function renderUnits(){
-  $("unitRows").innerHTML=Object.entries(UNIT).map(([k,u])=>{
+  $("unitRows").innerHTML=Object.entries(UNIT).filter(([k,u])=>u.summonable||total(k)>0).map(([k,u])=>{
     const x=S.units[k];
-    return `<tr><td>${esc(u.name)} <span class="muted">(${total(k)})</span></td><td>${u.cost}</td><td>${x.mining}</td><td>${x.defense}</td><td>${x.reserve}</td>
+    const cost=u.summonable?u.cost:(u.name.includes("アンデッド")?"獲得":"加入");
+    return `<tr><td>${esc(u.name)} <span class="muted">(${total(k)})</span></td><td>${cost}</td><td>${x.mining}</td><td>${x.defense}</td><td>${x.reserve}</td>
     <td><div class="row" style="justify-content:center">
       <button data-m="${k},reserve,mining">掘+</button><button data-m="${k},mining,reserve">掘−</button>
       <button data-m="${k},reserve,defense">防+</button><button data-m="${k},defense,reserve">防−</button>
@@ -625,7 +755,7 @@ function renderUnits(){
 function cardHtml(c){
   const pc=Math.max(0,c.hp/c.maxHp*100);
   return `<div class="card ${!c.alive?"dead":""}" id="card-${c.uid}">
-    <div class="row spread"><b>${esc(c.name)}</b><span class="badge">${esc(status(c.hp,c.maxHp))}</span></div>
+    <div class="row spread"><b>${esc(c.name)}</b><span class="badge">${esc(c.captured?"捕縛":status(c.hp,c.maxHp))}</span></div>
     <div class="hp"><i style="width:${pc}%"></i></div>
     <div>${c.hp}/${c.maxHp} HP</div>
     <small>攻${c.atk} 防${c.def} 速${c.spd}</small>
@@ -656,15 +786,22 @@ function renderBattle(){
     const assess=battleAssessmentText();
     $("battleAssessment").classList.toggle("hidden",!assess);
     $("battleAssessment").innerHTML=assess?'<div class="muted" style="font-size:12px;margin-bottom:5px">初遭遇講評</div><div class="lt-speech">'+esc(assess)+'</div>':"";
+    const disp=dispositionHtml();
+    $("battleDisposition").classList.toggle("hidden",!disp);
+    $("dispositionRows").innerHTML=disp;
+    bindDispositionButtons();
   }
 
-  $("battleStep").textContent=b.finished?"戦後処理を終了して次WTへ":"戦闘開始 / 次へ";
+  $("battleStep").textContent=b.finished?"戦後処理を終了して次WTへ":"戦闘開始 / 次へ";$("battleStep").disabled=b.finished&&unresolvedDispositions().length>0;
   $("battleAuto").textContent=b.autoAllies?"自軍自動：ON":"自軍も自動で進行";
-  $("playerAction").classList.toggle("hidden",!b.waiting||b.finished);
+  $("playerAction").classList.toggle("hidden",!b.waiting||b.finished);if(!b.waiting||b.finished)$("captureButtons").innerHTML="";
   if(b.waiting&&!b.finished){
     const actor=findActor(b.activeUid);$("actorText").innerHTML="<b>"+esc(actor.name)+"の手番</b> — 攻撃対象を選択";
     $("targetButtons").innerHTML=living(b.enemies).map(x=>`<button data-target="${x.uid}">${esc(x.name)} (${x.hp}/${x.maxHp})</button>`).join("");
     document.querySelectorAll("[data-target]").forEach(bt=>bt.onclick=()=>playerAttack(bt.dataset.target));
+    const capturable=living(b.enemies).filter(x=>x.hp/x.maxHp<=.2);
+    $("captureButtons").innerHTML=capturable.map(x=>`<button data-capture="${x.uid}">捕縛（テスト）：${esc(x.name)}</button>`).join("");
+    document.querySelectorAll("[data-capture]").forEach(bt=>bt.onclick=()=>captureEnemy(bt.dataset.capture));
   }
 }
 
@@ -674,6 +811,8 @@ function renderLog(){
 }
 
 function render(){
+  $("floorArrivalPanel").classList.toggle("hidden",!S.floor2ReportPending);
+  if(S.floor2ReportPending){$("floorLieutenantCard").innerHTML=lieutenantCardHtml();$("floorLtSpeech").textContent=floor2Speech();}
   $("wt").textContent=S.started?S.wt:"—";$("stones").textContent=S.stones;$("resources").textContent=S.resources;$("miningPower").textContent=miningPower();$("deaths").textContent=S.deaths;
   $("sessionLabel").textContent=S.sessionId;
   const side=Math.min(100,Math.sqrt(S.area));
@@ -692,7 +831,7 @@ function render(){
   $("minedTotal").textContent=S.minedTotal;$("spentTotal").textContent=S.spentTotal;$("resourceTotal").textContent=S.resourceTotal;$("battleCount").textContent=S.battleCount;$("reached").textContent=S.reachedFloor2?"WT"+S.reachedAt:"—";
   $("lieutenantCard").innerHTML=lieutenantCardHtml();
   $("report").textContent=report();
-  renderUnits();renderBattle();renderLog();save();
+  renderUnits();renderBattle();if(S.floor2ReportPending)$("managementPanels").classList.add("hidden");renderLog();save();
 }
 
 function loadConfigInputs(){
@@ -733,7 +872,7 @@ function summary(){
   ].join("\n");
 }
 
-$("startTutorial").onclick=tutorial;$("endTurn").onclick=endTurn;
+$("startTutorial").onclick=tutorial;$("endTurn").onclick=endTurn;$("ackFloor2").onclick=acknowledgeFloor2;
 $("summonKobold").onclick=()=>summon("kobold");$("summonGoblin").onclick=()=>summon("goblin");$("summonHob").onclick=()=>summon("hob");
 $("digExplore").onclick=()=>{if(!S.battle){S.digMode="explore";event("dig_mode",{mode:"explore"});render()}};
 $("digDown").onclick=()=>{if(S.lowerFound&&!S.battle){S.digMode="down";event("dig_mode",{mode:"down"});render()}};
