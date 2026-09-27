@@ -1085,7 +1085,13 @@ function applyConfig(){
   event("config_change",{config:clone(S.config)});render();
 }
 function setSeed(){
-  const n=(+$("seedInput").value)||1;S.seed=n>>>0;S.rngState=S.seed;event("seed_change",{seed:S.seed});render();
+  const n=(+$("seedInput").value)||1;
+  S.seed=n>>>0;
+  S.rngState=S.seed;
+  S.reconRngState=(S.seed^0x51F15EED)>>>0;
+  S.summonRngState=(S.seed^0x2C9277B5)>>>0;
+  event("seed_change",{seed:S.seed});
+  render();
 }
 
 function download(name,type,body){
