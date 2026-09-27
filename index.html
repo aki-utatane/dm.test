@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e11">
-<title>DM.TEST — 第一層 統合テスト v0.6</title>
+<title>DM.TEST — 第一層 統合テスト v0.7</title>
 <style>
 :root{
   color-scheme:dark;
@@ -58,8 +58,12 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 .role-box b{font-size:18px}
 .role-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .role-actions button{min-height:34px;padding:5px 7px}
-.summon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
-.summon-grid button{min-height:52px}
+.gacha-box{margin-top:10px;background:#11171b;border:1px solid #4a4431;border-radius:11px;padding:11px}
+.gacha-rates{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:9px 0}
+.gacha-rate{background:#171d22;border:1px solid #303a42;border-radius:9px;padding:8px;text-align:center}
+.gacha-rate b{display:block;font-size:16px}
+.gacha-result{margin-top:9px;padding:9px;background:#0f1418;border-radius:9px;border:1px solid #35414a;min-height:44px}
+.gacha-box button{min-height:46px}
 details.panel>summary{cursor:pointer;font-weight:700;list-style:none}
 details.panel>summary::-webkit-details-marker{display:none}
 details.panel>summary:after{content:"開く";float:right;color:var(--muted);font-size:12px;font-weight:400}
@@ -72,7 +76,7 @@ details.panel[open]>summary:after{content:"閉じる"}
 @media(max-width:650px){
   main{padding-bottom:96px}
   .unit-grid{grid-template-columns:1fr}
-  .summon-grid{grid-template-columns:1fr}
+  .gacha-rates{grid-template-columns:1fr}
   .turnbar-inner{grid-template-columns:1fr auto}
   .turnbar-info{gap:7px}
   .turnbar-info .optional{display:none}
@@ -142,7 +146,7 @@ details.panel[open]>summary:after{content:"閉じる"}
     <button id="battleStep" class="primary">戦闘開始 / 次へ</button>
     <button id="battleAuto">自軍も自動で進行</button>
   </div>
-  <p class="muted">v0.6では通常攻撃のみ。通常攻撃は最低1ダメージ。バランステスト値としてコボルト掘削12、下層突破1800、偵察補正は技能1あたり+5%・上限70%。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。偵察班が接近を察知した場合のみ、副官が経営画面で事前警告します。副官適性だけでは敵襲を発見しません。</p>
+  <p class="muted">v0.7では通常攻撃のみ。通常攻撃は最低1ダメージ。召喚は第一層ガチャ（10魔石、通常90% / 上位9.5% / 事故0.5%、10回天井）の縮小プールでテストします。バランステスト値としてコボルト掘削12、下層突破1800、偵察補正は技能1あたり+5%・上限70%。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。偵察班が接近を察知した場合のみ、副官が経営画面で事前警告します。副官適性だけでは敵襲を発見しません。</p>
   <div id="battleLog" class="log"></div>
 </section>
 
@@ -213,10 +217,22 @@ details.panel[open]>summary:after{content:"閉じる"}
   <div class="row spread"><h2>配下</h2><span class="muted">掘削・防衛・偵察・予備を実際に配分</span></div>
   <p class="muted">掘削班＝「掘削」、防衛班＝戦闘能力、偵察班＝「技能」を主に使用。偵察の警告がなくても安全とは限りません。現在の事前察知率（テスト値）：<b id="reconChance">10%</b></p>
   <div id="unitCards" class="unit-grid"></div>
-  <div class="summon-grid">
-    <button id="summonKobold">コボルト召喚　8魔石<br><small>掘削12 / 技能3</small></button>
-    <button id="summonGoblin">ゴブリン召喚　9魔石<br><small>掘削9 / 技能1</small></button>
-    <button id="summonHob">ホブゴブリン召喚　40魔石<br><small>掘削16 / 技能1</small></button>
+  <div class="gacha-box">
+    <div class="row spread">
+      <div><b>第一層召喚陣</b><small class="muted" style="display:block">1回 10魔石 / チュートリアル固定召喚は天井カウント外</small></div>
+      <span id="summonPity" class="badge">天井まで10回</span>
+    </div>
+    <div class="gacha-rates">
+      <div class="gacha-rate"><span class="muted">通常 Rank I</span><b>90%</b><small>コボルト / ゴブリン</small></div>
+      <div class="gacha-rate"><span class="muted">上位 Rank II</span><b>9.5%</b><small>ホブゴブリン / スケルトン</small></div>
+      <div class="gacha-rate"><span class="muted">召喚事故 Rank III</span><b>0.5%</b><small>オーク / ワーウルフ</small></div>
+    </div>
+    <p class="muted">テスト縮小プールです。同Rank内は均等抽選。上位または事故で天井カウンターを0へ戻します。</p>
+    <div class="row">
+      <button id="summonGacha" class="primary">召喚する　-10魔石</button>
+      <span class="muted">召喚回数 <b id="summonTotalInline">0</b></span>
+    </div>
+    <div id="summonLast" class="gacha-result muted">まだ通常召喚を行っていません。</div>
   </div>
 </section>
 
@@ -238,6 +254,7 @@ details.panel[open]>summary:after{content:"閉じる"}
       <tr><th>採掘魔石</th><td id="minedTotal">0</td></tr>
       <tr><th>消費魔石</th><td id="spentTotal">0</td></tr>
       <tr><th>取得資源</th><td id="resourceTotal">0</td></tr>
+      <tr><th>ガチャ召喚</th><td><span id="summonTotal">0</span>回（上位 <span id="summonUpper">0</span> / 事故 <span id="summonAccident">0</span>）</td></tr>
       <tr><th>戦闘回数</th><td id="battleCount">0</td></tr>
       <tr><th>第二層到達</th><td id="reached">—</td></tr>
     </tbody></table>
@@ -308,12 +325,15 @@ details.panel[open]>summary:after{content:"閉じる"}
 (() => {
 "use strict";
 
-const KEY="dm-test-integrated-v06";
+const KEY="dm-test-integrated-v07";
 
 const UNIT={
-  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:12,skill:3,cost:8,summonable:true},
-  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:11,def:8,mdef:5,spd:12,mining:9,skill:1,cost:9,summonable:true},
-  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,skill:1,cost:40,summonable:true},
+  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:12,skill:3,rank:1,summonable:true},
+  goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:10,def:8,mdef:5,spd:12,mining:9,skill:1,rank:1,summonable:true},
+  hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,skill:1,rank:2,summonable:true},
+  skeleton:{id:"skeleton",name:"スケルトン",hp:45,atk:16,def:17,mdef:18,spd:8,mining:16,skill:0,rank:2,summonable:true},
+  orc:{id:"orc",name:"オーク",hp:100,atk:24,def:28,mdef:13,spd:9,mining:16,skill:2,rank:3,summonable:true},
+  werewolf:{id:"werewolf",name:"ワーウルフ",hp:90,atk:28,def:24,mdef:12,spd:16,mining:16,skill:0,rank:3,summonable:true},
   noviceWarriorAlive:{id:"noviceWarriorAlive",name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,skill:1,cost:null,acquired:true},
   noviceWarriorUndead:{id:"noviceWarriorUndead",name:"駆け出し戦士（アンデッド）",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,skill:1,cost:null,acquired:true},
   regularWarriorAlive:{id:"regularWarriorAlive",name:"一般戦士",hp:60,atk:16,def:18,mdef:12,spd:10,mining:16,skill:1,cost:null,acquired:true},
@@ -322,6 +342,14 @@ const UNIT={
   banditUndead:{id:"banditUndead",name:"野党（アンデッド）",hp:40,atk:12,def:11,mdef:8,spd:13,mining:15,skill:2,cost:null,acquired:true},
   banditBossAlive:{id:"banditBossAlive",name:"野党ボス",hp:65,atk:17,def:17,mdef:11,spd:14,mining:18,skill:3,cost:null,acquired:true},
   banditBossUndead:{id:"banditBossUndead",name:"野党ボス（アンデッド）",hp:65,atk:17,def:17,mdef:11,spd:14,mining:18,skill:3,cost:null,acquired:true}
+};
+const GACHA={
+  1:{
+    cost:10,
+    normal:["kobold","goblin"],
+    upper:["hob","skeleton"],
+    accident:["orc","werewolf"]
+  }
 };
 const ENEMY={
   noviceWarrior:{name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,baseStone:15},
@@ -344,7 +372,7 @@ const ENCOUNTERS={
 
 function initial(){
   return {
-    version:"0.6-integrated",
+    version:"0.7-integrated",
     sessionId:"DM-"+new Date().toISOString().replace(/\D/g,"").slice(0,14)+"-"+Math.random().toString(36).slice(2,6),
     startedAt:new Date().toISOString(),
     wt:1,started:false,stones:0,resources:0,minedTotal:0,spentTotal:0,resourceTotal:0,deaths:0,battleCount:0,
@@ -353,7 +381,8 @@ function initial(){
     units:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:0,defense:0,scouting:0,reserve:0}])),
     hpPools:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:[],defense:[],scouting:[],reserve:[]}])),
     config:{discovery:1600,downNeed:1800,normalMul:4,hardMul:1,stoneDensity:.05625,resourceDensity:.125,reconBase:.10,reconPerSkill:.05,reconCap:.70,enemyTarget:"random"},
-    seed:20260926,rngState:20260926,reconRngState:(20260926^0x51F15EED)>>>0,
+    seed:20260926,rngState:20260926,reconRngState:(20260926^0x51F15EED)>>>0,summonRngState:(20260926^0x2C9277B5)>>>0,
+    summon:{floorCounters:{1:0},total:0,normal:0,upper:0,accident:0,last:null},
     seenEnemyTypes:{},assessedEnemyTypes:{},reconResults:{},
     battle:null,events:[]
   };
@@ -439,7 +468,7 @@ function excavateHorizontal(power){
   return dug;
 }
 const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
-const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),scoutingPower:scoutingPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,floor2Ready:S.floor2Ready,reachedFloor2:S.reachedFloor2,units:clone(S.units),hpPools:clone(S.hpPools),deaths:S.deaths});
+const snap=()=>({wt:S.wt,stones:S.stones,resources:S.resources,miningPower:miningPower(),scoutingPower:scoutingPower(),area:+S.area.toFixed(1),down:+S.down.toFixed(1),lowerFound:S.lowerFound,floor2Ready:S.floor2Ready,reachedFloor2:S.reachedFloor2,summon:clone(S.summon),units:clone(S.units),hpPools:clone(S.hpPools),deaths:S.deaths});
 
 function event(type,detail={}){
   S.events.push({seq:S.events.length+1,at:new Date().toISOString(),wt:S.wt,type,detail,state:snap()});
@@ -456,6 +485,12 @@ function rng(){
 }
 function reconRng(){
   let t=S.reconRngState+=0x6D2B79F5;
+  t=Math.imul(t^t>>>15,t|1);
+  t^=t+Math.imul(t^t>>>7,t|61);
+  return ((t^t>>>14)>>>0)/4294967296;
+}
+function summonRng(){
+  let t=S.summonRngState+=0x6D2B79F5;
   t=Math.imul(t^t>>>15,t|1);
   t^=t+Math.imul(t^t>>>7,t|61);
   return ((t^t>>>14)>>>0)/4294967296;
@@ -480,15 +515,38 @@ function tutorial(){
   S.units.kobold.mining=3;S.units.goblin.defense=2;
   S.hpPools.kobold.mining=[UNIT.kobold.hp,UNIT.kobold.hp,UNIT.kobold.hp];
   S.hpPools.goblin.defense=[UNIT.goblin.hp,UNIT.goblin.hp];
-  event("tutorial_summon",{kobold:3,goblin:2,cost});
+  event("tutorial_summon",{kobold:3,goblin:2,cost,countsTowardPity:false});
   render();
 }
 
-function summon(type){
-  const u=UNIT[type];
-  if(!S.started||S.battle||S.stones<u.cost)return;
-  S.stones-=u.cost;S.spentTotal+=u.cost;addOwnedUnit(type,"reserve",u.hp);
-  event("summon",{unit:type,cost:u.cost});render();
+function summonGacha(){
+  const floor=1,g=GACHA[floor];
+  if(!S.started||S.battle||S.reachedFloor2||S.stones<g.cost)return;
+  const pityBefore=S.summon.floorCounters[floor]||0;
+  const roll=summonRng();
+  let tier="normal",pityTriggered=false;
+  if(roll<.005){
+    tier="accident";
+  }else if(pityBefore>=9){
+    tier="upper";pityTriggered=true;
+  }else if(roll<.10){
+    tier="upper";
+  }
+  const pool=g[tier];
+  const unit=pool[Math.floor(summonRng()*pool.length)];
+  S.stones-=g.cost;S.spentTotal+=g.cost;
+  addOwnedUnit(unit,"reserve",UNIT[unit].hp);
+  if(tier==="normal")S.summon.floorCounters[floor]=pityBefore+1;
+  else S.summon.floorCounters[floor]=0;
+  S.summon.total++;
+  S.summon[tier]++;
+  S.summon.last={floor,tier,unit,pityTriggered,roll:+roll.toFixed(5),wt:S.wt};
+  event("summon_gacha",{
+    floor,cost:g.cost,tier,unit,roll:+roll.toFixed(5),
+    pityBefore,pityAfter:S.summon.floorCounters[floor],pityTriggered,
+    pool:[...pool]
+  });
+  render();
 }
 
 function move(type,from,to){
@@ -905,7 +963,7 @@ function renderUnits(){
     </div>`;
   $("unitCards").innerHTML=Object.entries(UNIT).filter(([k,u])=>u.summonable||total(k)>0).map(([k,u])=>{
     const x=S.units[k];
-    const cost=u.summonable?u.cost+"魔石":(u.name.includes("アンデッド")?"獲得":"加入");
+    const cost=u.summonable?"Rank "+u.rank:(u.name.includes("アンデッド")?"獲得":"加入");
     return `<div class="unit-manage">
       <div class="unit-head">
         <div><b>${esc(u.name)}</b><small>計${total(k)}体　掘削${u.mining} / 技能${u.skill}</small></div>
@@ -998,8 +1056,18 @@ function render(){
   if(S.digMode==="down"&&S.lowerFound)$("rockLabel").textContent="岩盤：下方（抵抗4相当）";
   else{const r=horizontalResistance(S.area);$("rockLabel").textContent=r===1?"岩盤：通常（抵抗1）":"岩盤：硬い（抵抗"+r+"）";}
   $("startTutorial").disabled=S.started;$("endTurn").disabled=!S.started||!!S.battle||S.reachedFloor2;
-  $("summonKobold").disabled=!S.started||S.stones<8||!!S.battle;$("summonGoblin").disabled=!S.started||S.stones<9||!!S.battle;$("summonHob").disabled=!S.started||S.stones<40||!!S.battle;
-  $("minedTotal").textContent=S.minedTotal;$("spentTotal").textContent=S.spentTotal;$("resourceTotal").textContent=S.resourceTotal;$("battleCount").textContent=S.battleCount;$("reached").textContent=S.reachedFloor2?"WT"+S.reachedAt:"—";
+  const pity=S.summon.floorCounters[1]||0;
+  $("summonGacha").disabled=!S.started||S.stones<GACHA[1].cost||!!S.battle||S.reachedFloor2;
+  $("summonPity").textContent=pity>=9?"次回 上位以上確定":"天井まで"+(10-pity)+"回";
+  $("summonTotalInline").textContent=S.summon.total;
+  $("summonLast").className="gacha-result"+(S.summon.last?.tier==="accident"?" badge bad":"");
+  if(S.summon.last){
+    const x=S.summon.last,tag=x.tier==="normal"?"通常 Rank I":x.tier==="upper"?"上位 Rank II":"召喚事故 Rank III";
+    $("summonLast").textContent=tag+" → "+UNIT[x.unit].name+(x.pityTriggered?"（天井）":"");
+  }else $("summonLast").textContent="まだ通常召喚を行っていません。";
+  $("minedTotal").textContent=S.minedTotal;$("spentTotal").textContent=S.spentTotal;$("resourceTotal").textContent=S.resourceTotal;
+  $("summonTotal").textContent=S.summon.total;$("summonUpper").textContent=S.summon.upper;$("summonAccident").textContent=S.summon.accident;
+  $("battleCount").textContent=S.battleCount;$("reached").textContent=S.reachedFloor2?"WT"+S.reachedAt:"—";
   $("lieutenantCard").innerHTML=lieutenantCardHtml();
   $("report").textContent=report();
   renderUnits();renderBattle();if(S.floor2ReportPending)$("managementPanels").classList.add("hidden");renderLog();save();
@@ -1035,6 +1103,7 @@ function summary(){
     "第二層到達="+(S.reachedFloor2?"YES(WT"+S.reachedAt+")":"NO"),
     "魔石="+S.stones+" / 採掘累計="+S.minedTotal+" / 消費累計="+S.spentTotal,
     "資源="+S.resources,
+    "ガチャ召喚="+S.summon.total+" / 上位="+S.summon.upper+" / 事故="+S.summon.accident+" / 天井カウンター="+(S.summon.floorCounters[1]||0),
     "偵察技能="+scoutingPower()+" / 現在察知率="+Math.round(currentReconChance()*100)+"%",
     "死亡="+S.deaths+" / 戦闘="+S.battleCount,
     "概算掘削="+Math.floor(Math.sqrt(S.area))+"x"+Math.floor(Math.sqrt(S.area)),
@@ -1045,7 +1114,7 @@ function summary(){
 }
 
 $("startTutorial").onclick=tutorial;$("endTurn").onclick=endTurn;$("ackFloor2").onclick=acknowledgeFloor2;
-$("summonKobold").onclick=()=>summon("kobold");$("summonGoblin").onclick=()=>summon("goblin");$("summonHob").onclick=()=>summon("hob");
+$("summonGacha").onclick=summonGacha;
 $("digExplore").onclick=()=>{if(!S.battle){S.digMode="explore";event("dig_mode",{mode:"explore"});render()}};
 $("digDown").onclick=()=>{if(S.lowerFound&&!S.battle){S.digMode="down";event("dig_mode",{mode:"down"});render()}};
 $("lieutenant").onchange=()=>{event("lieutenant_view",{value:$("lieutenant").value});render()};
