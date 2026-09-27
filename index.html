@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e11">
-<title>DM.TEST — 第一層 統合テスト v0.5</title>
+<title>DM.TEST — 第一層 統合テスト v0.6</title>
 <style>
 :root{
   color-scheme:dark;
@@ -47,7 +47,37 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 5px;b
 input,select,textarea{background:#0f1418;border:1px solid #3b4650;color:var(--text);border-radius:8px;padding:7px}input[type=number]{width:88px}textarea{width:100%;min-height:62px}
 .hidden{display:none!important}.debug{border-color:#554e38}
 hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
-@media(max-width:650px){.stats{grid-template-columns:repeat(2,1fr)}table{font-size:12px}th,td{padding:6px 3px}.wide{overflow-x:auto}}
+@media(max-width:650px){.stats{grid-template-columns:repeat(3,1fr)}table{font-size:12px}th,td{padding:6px 3px}.wide{overflow-x:auto}}
+.unit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.unit-manage{background:#101519;border:1px solid #34404a;border-radius:11px;padding:10px}
+.unit-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px}
+.unit-head small{display:block;margin-top:2px}
+.role-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.role-box{background:#171d22;border:1px solid #303a42;border-radius:9px;padding:8px}
+.role-box .role-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.role-box b{font-size:18px}
+.role-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.role-actions button{min-height:34px;padding:5px 7px}
+.summon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.summon-grid button{min-height:52px}
+details.panel>summary{cursor:pointer;font-weight:700;list-style:none}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary:after{content:"開く";float:right;color:var(--muted);font-size:12px;font-weight:400}
+details.panel[open]>summary:after{content:"閉じる"}
+.turnbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(15,20,24,.97);border-top:1px solid var(--line);padding:8px max(12px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));backdrop-filter:blur(12px)}
+.turnbar-inner{max-width:1120px;margin:auto;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.turnbar-info{display:flex;gap:12px;align-items:center;min-width:0;overflow:hidden;white-space:nowrap}
+.turnbar-info b{font-size:15px}.turnbar-info span{font-size:12px;color:var(--muted)}
+.turnbar button{min-width:150px;min-height:46px;font-weight:700}
+@media(max-width:650px){
+  main{padding-bottom:96px}
+  .unit-grid{grid-template-columns:1fr}
+  .summon-grid{grid-template-columns:1fr}
+  .turnbar-inner{grid-template-columns:1fr auto}
+  .turnbar-info{gap:7px}
+  .turnbar-info .optional{display:none}
+  .turnbar button{min-width:112px}
+}
 </style>
 </head>
 <body>
@@ -112,7 +142,7 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <button id="battleStep" class="primary">戦闘開始 / 次へ</button>
     <button id="battleAuto">自軍も自動で進行</button>
   </div>
-  <p class="muted">v0.5では通常攻撃のみ。通常攻撃は最低1ダメージ。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。偵察班が接近を察知した場合のみ、副官が経営画面で事前警告します。副官適性だけでは敵襲を発見しません。</p>
+  <p class="muted">v0.6では通常攻撃のみ。通常攻撃は最低1ダメージ。バランステスト値としてコボルト掘削12、下層突破1800、偵察補正は技能1あたり+5%・上限70%。撤退・降伏・罠・特殊能力の正式判定は未実装です。瀕死の敵はテスト用に捕縛でき、戦後に配下加入の影響を確認できます。偵察班が接近を察知した場合のみ、副官が経営画面で事前警告します。副官適性だけでは敵襲を発見しません。</p>
   <div id="battleLog" class="log"></div>
 </section>
 
@@ -182,16 +212,11 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 <section class="panel">
   <div class="row spread"><h2>配下</h2><span class="muted">掘削・防衛・偵察・予備を実際に配分</span></div>
   <p class="muted">掘削班＝「掘削」、防衛班＝戦闘能力、偵察班＝「技能」を主に使用。偵察の警告がなくても安全とは限りません。現在の事前察知率（テスト値）：<b id="reconChance">10%</b></p>
-  <div class="wide">
-  <table>
-    <thead><tr><th>配下</th><th>費用</th><th>技能</th><th>掘削</th><th>防衛</th><th>偵察</th><th>予備</th><th>配置変更</th></tr></thead>
-    <tbody id="unitRows"></tbody>
-  </table>
-  </div>
-  <div class="row" style="margin-top:10px">
-    <button id="summonKobold">コボルト召喚 -8</button>
-    <button id="summonGoblin">ゴブリン召喚 -9</button>
-    <button id="summonHob">ホブゴブリン召喚 -40</button>
+  <div id="unitCards" class="unit-grid"></div>
+  <div class="summon-grid">
+    <button id="summonKobold">コボルト召喚　8魔石<br><small>掘削12 / 技能3</small></button>
+    <button id="summonGoblin">ゴブリン召喚　9魔石<br><small>掘削9 / 技能1</small></button>
+    <button id="summonHob">ホブゴブリン召喚　40魔石<br><small>掘削16 / 技能1</small></button>
   </div>
 </section>
 
@@ -200,7 +225,6 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <h2>WT操作</h2>
     <div class="stack">
       <button id="startTutorial" class="primary">初回鉱脈42 → コボルト3・ゴブリン2召喚</button>
-      <button id="endTurn" class="warn" disabled>WT終了</button>
       <div class="row">
         <input id="memo" placeholder="主観メモ：不足感、面倒さ等" style="flex:1;min-width:180px">
         <button id="memoBtn">記録</button>
@@ -221,13 +245,14 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
 </div>
 </section>
 
-<section class="panel debug">
-  <h2>テスト設定（仮置き値）</h2>
+<details class="panel debug">
+  <summary>テスト設定（仮置き値）</summary>
+  <div style="margin-top:12px">
   <div class="grid">
     <div class="stack">
       <label>下層ポイント発見面積 <input id="cfgDiscovery" type="number" value="1600"></label>
       <label>横掘り硬化 <span class="badge">50 / 60 / 70 / 80 / 90</span></label>
-      <label>下層突破必要量 <input id="cfgDown" type="number" value="720"></label>
+      <label>下層突破必要量 <input id="cfgDown" type="number" value="1800"></label>
       <label>通常岩倍率 <input id="cfgNormal" type="number" step=".1" value="4"></label>
     </div>
     <div class="stack">
@@ -235,8 +260,8 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
       <label>魔石/実掘削量 <input id="cfgStone" type="number" step=".001" value=".05625"></label>
       <label>資源/実掘削量 <input id="cfgResource" type="number" step=".005" value=".125"></label>
       <label>偵察 基礎成功率% <input id="cfgReconBase" type="number" min="0" max="100" value="10"></label>
-      <label>技能1あたり加算% <input id="cfgReconPerSkill" type="number" min="0" max="100" value="10"></label>
-      <label>偵察成功率上限% <input id="cfgReconCap" type="number" min="0" max="100" value="90"></label>
+      <label>技能1あたり加算% <input id="cfgReconPerSkill" type="number" min="0" max="100" value="5"></label>
+      <label>偵察成功率上限% <input id="cfgReconCap" type="number" min="0" max="100" value="70"></label>
       <label>侵入者標的
         <select id="cfgEnemyTarget">
           <option value="random">ランダム（暫定）</option>
@@ -251,10 +276,11 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <label>乱数seed <input id="seedInput" type="number" value="20260926"></label>
     <button id="applySeed">seed変更</button>
   </div>
-</section>
+</div></details>
 
-<section class="panel">
-  <div class="row spread"><h2>テレメトリ</h2><span id="eventCount" class="muted"></span></div>
+<details class="panel">
+  <summary>テレメトリ <span id="eventCount" class="muted"></span></summary>
+  <div style="margin-top:12px">
   <div id="eventLog" class="log"></div>
   <div class="row" style="margin-top:10px">
     <button id="exportJson">JSON</button>
@@ -262,17 +288,30 @@ hr{border:0;border-top:1px solid #2a333a;margin:10px 0}
     <button id="copySummary">集計コピー</button>
     <button id="reset" class="danger">初期化</button>
   </div>
-</section>
+  </div>
+</details>
 
 </main>
+
+<div class="turnbar">
+  <div class="turnbar-inner">
+    <div class="turnbar-info">
+      <b id="bottomWt">WT —</b>
+      <span id="bottomMode">未開始</span>
+      <span class="optional">魔石 <b id="bottomStone">0</b></span>
+      <span class="optional">掘削力 <b id="bottomMining">0</b></span>
+    </div>
+    <button id="endTurn" class="warn" disabled>WT終了</button>
+  </div>
+</div>
 <script>
 (() => {
 "use strict";
 
-const KEY="dm-test-integrated-v05";
+const KEY="dm-test-integrated-v06";
 
 const UNIT={
-  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:16,skill:3,cost:8,summonable:true},
+  kobold:{id:"kobold",name:"コボルト",hp:25,atk:8,def:7,mdef:5,spd:13,mining:12,skill:3,cost:8,summonable:true},
   goblin:{id:"goblin",name:"ゴブリン",hp:30,atk:11,def:8,mdef:5,spd:12,mining:9,skill:1,cost:9,summonable:true},
   hob:{id:"hob",name:"ホブゴブリン",hp:70,atk:14,def:20,mdef:10,spd:11,mining:16,skill:1,cost:40,summonable:true},
   noviceWarriorAlive:{id:"noviceWarriorAlive",name:"駆け出し戦士",hp:45,atk:13,def:13,mdef:8,spd:10,mining:14,skill:1,cost:null,acquired:true},
@@ -305,7 +344,7 @@ const ENCOUNTERS={
 
 function initial(){
   return {
-    version:"0.5-integrated",
+    version:"0.6-integrated",
     sessionId:"DM-"+new Date().toISOString().replace(/\D/g,"").slice(0,14)+"-"+Math.random().toString(36).slice(2,6),
     startedAt:new Date().toISOString(),
     wt:1,started:false,stones:0,resources:0,minedTotal:0,spentTotal:0,resourceTotal:0,deaths:0,battleCount:0,
@@ -313,7 +352,7 @@ function initial(){
     stoneCarry:0,resourceCarry:0,
     units:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:0,defense:0,scouting:0,reserve:0}])),
     hpPools:Object.fromEntries(Object.keys(UNIT).map(k=>[k,{mining:[],defense:[],scouting:[],reserve:[]}])),
-    config:{discovery:1600,downNeed:720,normalMul:4,hardMul:1,stoneDensity:.05625,resourceDensity:.125,reconBase:.10,reconPerSkill:.10,reconCap:.90,enemyTarget:"random"},
+    config:{discovery:1600,downNeed:1800,normalMul:4,hardMul:1,stoneDensity:.05625,resourceDensity:.125,reconBase:.10,reconPerSkill:.05,reconCap:.70,enemyTarget:"random"},
     seed:20260926,rngState:20260926,reconRngState:(20260926^0x51F15EED)>>>0,
     seenEnemyTypes:{},assessedEnemyTypes:{},reconResults:{},
     battle:null,events:[]
@@ -855,15 +894,30 @@ function report(){
 }
 
 function renderUnits(){
-  $("unitRows").innerHTML=Object.entries(UNIT).filter(([k,u])=>u.summonable||total(k)>0).map(([k,u])=>{
+  const roleBox=(k,label,role,count)=>`
+    <div class="role-box">
+      <div class="role-top"><span>${label}</span><b>${count}</b></div>
+      ${roleHpNote(k,role)}
+      <div class="role-actions">
+        <button data-m="${k},${role},reserve" ${count<1?"disabled":""}>− 戻す</button>
+        <button data-m="${k},reserve,${role}" ${S.units[k].reserve<1?"disabled":""}>＋ 配置</button>
+      </div>
+    </div>`;
+  $("unitCards").innerHTML=Object.entries(UNIT).filter(([k,u])=>u.summonable||total(k)>0).map(([k,u])=>{
     const x=S.units[k];
-    const cost=u.summonable?u.cost:(u.name.includes("アンデッド")?"獲得":"加入");
-    return `<tr><td>${esc(u.name)} <span class="muted">(${total(k)})</span></td><td>${cost}</td><td>${u.skill}</td><td>${x.mining}${roleHpNote(k,"mining")}</td><td>${x.defense}${roleHpNote(k,"defense")}</td><td>${x.scouting}${roleHpNote(k,"scouting")}</td><td>${x.reserve}${roleHpNote(k,"reserve")}</td>
-    <td><div class="row" style="justify-content:center">
-      <button data-m="${k},reserve,mining">掘+</button><button data-m="${k},mining,reserve">掘−</button>
-      <button data-m="${k},reserve,defense">防+</button><button data-m="${k},defense,reserve">防−</button>
-      <button data-m="${k},reserve,scouting">偵+</button><button data-m="${k},scouting,reserve">偵−</button>
-    </div></td></tr>`;
+    const cost=u.summonable?u.cost+"魔石":(u.name.includes("アンデッド")?"獲得":"加入");
+    return `<div class="unit-manage">
+      <div class="unit-head">
+        <div><b>${esc(u.name)}</b><small>計${total(k)}体　掘削${u.mining} / 技能${u.skill}</small></div>
+        <span class="badge">${cost}</span>
+      </div>
+      <div class="role-grid">
+        ${roleBox(k,"掘削", "mining", x.mining)}
+        ${roleBox(k,"防衛", "defense", x.defense)}
+        ${roleBox(k,"偵察", "scouting", x.scouting)}
+        <div class="role-box"><div class="role-top"><span>予備</span><b>${x.reserve}</b></div>${roleHpNote(k,"reserve")}<small>各班への配置元</small></div>
+      </div>
+    </div>`;
   }).join("");
   document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const [k,f,t]=b.dataset.m.split(",");move(k,f,t)});
 }
@@ -929,7 +983,7 @@ function renderLog(){
 function render(){
   $("floorArrivalPanel").classList.toggle("hidden",!S.floor2ReportPending);
   if(S.floor2ReportPending){$("floorLieutenantCard").innerHTML=lieutenantCardHtml();$("floorLtSpeech").textContent=floor2Speech();}
-  $("wt").textContent=S.started?S.wt:"—";$("stones").textContent=S.stones;$("resources").textContent=S.resources;$("miningPower").textContent=miningPower();$("scoutingPower").textContent=scoutingPower();$("reconChance").textContent=Math.round(currentReconChance()*100)+"%";$("deaths").textContent=S.deaths;
+  $("wt").textContent=S.started?S.wt:"—";$("stones").textContent=S.stones;$("resources").textContent=S.resources;$("miningPower").textContent=miningPower();$("scoutingPower").textContent=scoutingPower();$("reconChance").textContent=Math.round(currentReconChance()*100)+"%";$("deaths").textContent=S.deaths;$("bottomWt").textContent=S.started?"WT "+S.wt:"WT —";$("bottomStone").textContent=S.stones;$("bottomMining").textContent=miningPower();$("bottomMode").textContent=!S.started?"未開始":S.digMode==="down"?"下方掘削":"横掘削";
   $("sessionLabel").textContent=S.sessionId;
   const side=Math.min(100,Math.sqrt(S.area));
   $("rangeText").textContent=Math.floor(side)+" × "+Math.floor(side);
